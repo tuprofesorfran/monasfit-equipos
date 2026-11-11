@@ -1,0 +1,643 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b7a6a">
+<title>Monasfit Equipos</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Layout: app móvil de una columna. Cabecera fija con equipo y pestañas; sesiones como filas con la hora a la izquierda. */
+:root{
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --bg:#eff3f1; --surface:#ffffff; --surface-2:#e5ece9; --line:#d0dad6;
+  --fg:#14201c; --muted:#53635d;
+  --accent:#0b7a6a; --accent-soft:#d3eee8; --accent-ink:#ffffff;
+  --val:#97570a; --val-soft:#f9e8c9;
+  --danger:#b3261e; --danger-soft:#fbe0dd; --ok:#27733a;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0e1613; --surface:#16201d; --surface-2:#1f2c28; --line:#2a3a35;
+  --fg:#e6efec; --muted:#9bb0a8;
+  --accent:#3ecbb2; --accent-soft:#12372f; --accent-ink:#06201a;
+  --val:#f2b84b; --val-soft:#3a2d0f;
+  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0e1613; --surface:#16201d; --surface-2:#1f2c28; --line:#2a3a35;
+  --fg:#e6efec; --muted:#9bb0a8;
+  --accent:#3ecbb2; --accent-soft:#12372f; --accent-ink:#06201a;
+  --val:#f2b84b; --val-soft:#3a2d0f;
+  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
+  padding-block:0 4rem;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px))}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--surface);z-index:10}
+.wrap{max-width:760px;margin:0 auto}
+h1,h2,h3,h4{font-family:var(--display);font-weight:700;margin:0;line-height:1.1;text-wrap:balance}
+h1{font-size:1.9rem;letter-spacing:.01em}
+h2{font-size:1.5rem;margin:1.4rem 0 .6rem}
+h3{font-size:1.15rem}
+h4{font-size:1.1rem;margin-bottom:.5rem}
+p{margin:.3rem 0}
+.muted{color:var(--muted)}
+.eyebrow{font-size:.72rem;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);margin:0 0 .15rem;font-weight:600}
+
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin-inline:-16px;padding:.7rem 16px 0}
+.brand{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
+.who{display:flex;flex-direction:column;gap:.15rem}
+.who label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.tabs{display:flex;gap:.25rem;margin-top:.6rem;overflow-x:auto}
+.tab{padding:.55rem .85rem;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
+.tab[aria-current="page"]{color:var(--fg);border-bottom-color:var(--accent)}
+main{padding-top:1rem}
+
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;font-size:16px;padding:.55rem .65rem;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+textarea{resize:vertical;line-height:1.45}
+label{display:block;font-size:.82rem;font-weight:600;margin:.7rem 0 .25rem}
+select{width:auto;max-width:100%}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;min-height:40px;padding:.4rem .95rem;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.sm{min-height:34px;padding:.2rem .7rem;font-size:.86rem}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn[disabled]{opacity:.55;cursor:default}
+.row{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+@media (max-width:520px){.grid2{grid-template-columns:1fr}}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.9rem;margin:.6rem 0;min-width:0}
+.note{border-radius:8px;padding:.6rem .8rem;margin:.6rem 0;background:var(--surface-2)}
+.note.err{background:var(--danger-soft);color:var(--danger)}
+.note.ok{background:var(--accent-soft)}
+
+.day{display:flex;align-items:baseline;gap:.5rem;margin:1.2rem 0 .4rem;font-size:1.2rem;text-transform:capitalize}
+.day .dl{font-size:.74rem;letter-spacing:.08em;text-transform:uppercase;background:var(--accent);color:var(--accent-ink);border-radius:4px;padding:.05rem .4rem;font-family:var(--body);font-weight:600}
+.sess{display:grid;grid-template-columns:5.4rem minmax(0,1fr);gap:.8rem;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.8rem;margin:.45rem 0}
+.time{font-family:var(--display);font-weight:600;font-size:1.3rem;line-height:1.1;font-variant-numeric:tabular-nums}
+.slotn{display:block;font-family:var(--body);font-size:.72rem;color:var(--muted);font-weight:500;margin-top:.15rem}
+.what{min-width:0}
+.what strong{font-size:1.02rem}
+.badge{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:5px;padding:.1rem .45rem;margin-left:.35rem;vertical-align:.1em}
+.b-E{background:var(--accent-soft);color:var(--accent)}
+.b-V{background:var(--val-soft);color:var(--val)}
+.team{display:inline-block;font-size:.8rem;font-weight:600;border:1px solid var(--line);border-radius:999px;padding:.05rem .6rem;background:var(--surface-2)}
+.team.mine{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.team.none{color:var(--danger);border-color:var(--danger);background:var(--danger-soft)}
+.clash{color:var(--danger);font-size:.8rem;font-weight:600}
+.pr-row{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.5rem}
+.ok{color:var(--ok);font-weight:600;font-size:.88rem}
+.pending{color:var(--val);font-weight:600;font-size:.88rem}
+.pres{margin-top:.6rem;padding:.7rem .8rem;border-radius:8px;background:var(--surface-2)}
+.pres dt{font-size:.72rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-top:.5rem}
+.pres dt:first-child{margin-top:0}
+.pres dd{margin:.1rem 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.editor{margin-top:.7rem;padding:.9rem;border:1px solid var(--accent);border-radius:10px;background:var(--surface)}
+.filters{display:flex;gap:.4rem;flex-wrap:wrap;margin:.4rem 0}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:.3rem .85rem;font-weight:600;font-size:.86rem;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.pick{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem;margin-top:.8rem}
+.pick button{min-height:56px;font-family:var(--display);font-size:1.5rem;font-weight:700;border:1px solid var(--line);background:var(--surface);border-radius:10px;cursor:pointer}
+.pick button:hover{border-color:var(--accent);color:var(--accent)}
+.members{display:grid;grid-template-columns:5.5rem minmax(0,1fr);gap:.4rem .6rem;align-items:center}
+.members span{font-weight:600;font-size:.9rem}
+.list-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;align-items:center;padding:.55rem 0;border-top:1px solid var(--line)}
+.list-row:first-child{border-top:0}
+.small{font-size:.84rem}
+.foot{margin:2.5rem 0 0;text-align:center}
+.foot a{color:var(--muted);font-size:.85rem}
+pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
+@media (prefers-reduced-motion:no-preference){.sess,.card{transition:border-color .15s}}
+</style>
+</head>
+<body>
+<div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando Monasfit Equipos…</p></div></div>
+<script>
+(function(){
+"use strict";
+var TEAMS=12;
+var SLOTS=[null,"7:55–8:50","8:50–9:45","9:45–10:40","11:10–12:05","12:05–13:00","13:00–13:55"];
+var SLOT_START={"7:55":1,"8:50":2,"9:45":3,"11:10":4,"12:05":5,"13:00":6};
+var GOALS=["Salud general","Reducir grasa corporal","Ganar masa muscular","Mejorar la condición física","Prevenir lesiones o dolor de espalda","Mejorar la movilidad"];
+var TABS=[["mi-equipo","Mi equipo"],["agenda","Agenda"],["profesorado","Profesorado"],["gestion","Gestión"]];
+
+var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
+  tab:"mi-equipo",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},
+  rev:{config:0,teams:0,teachers:0,bookings:0},
+  editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
+  bulkErr:[],noRestore:false,scrollEditor:false};
+
+var $app=document.getElementById("app");
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
+function pad(n){return String(n).padStart(2,"0");}
+function todayStr(){var d=new Date();return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function addDays(s,n){var p=s.split("-").map(Number);var d=new Date(p[0],p[1]-1,p[2]+n);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());}
+function fmtDate(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{weekday:"long",day:"numeric",month:"long"});}
+function fmtShort(ms){return new Date(ms).toLocaleDateString("es-ES",{day:"numeric",month:"short"});}
+function dayTag(s){var t=todayStr();return s===t?"Hoy":(s===addDays(t,1)?"Mañana":"");}
+function tkeyOf(n){return String(n).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80)||"sin-nombre";}
+var TYPE_RANK={V:0,E:1};
+function cmp(a,b){
+  return a.date.localeCompare(b.date)||(a.slot-b.slot)||((TYPE_RANK[a.type]||0)-(TYPE_RANK[b.type]||0))||((a.createdAt||0)-(b.createdAt||0))||String(a.id).localeCompare(String(b.id));
+}
+function typeName(t){return t==="V"?"Valoración":"Entrenamiento";}
+
+/* ---------- Lógica de rotación (pura) ---------- */
+function planAssign(bookings,teachers,ptr){
+  var all=bookings.map(function(b){return Object.assign({},b);});
+  var val={};Object.keys(teachers).forEach(function(k){val[k]=teachers[k].valTeam||null;});
+  var pend=all.filter(function(b){return !b.team;}).sort(cmp);
+  var assign=[],vals=[];
+  pend.forEach(function(b){
+    var team=null;
+    if(b.type==="V"&&val[b.tkey]){team=val[b.tkey];}
+    else{
+      var busy={};
+      all.forEach(function(x){if(x.team&&x.date===b.date&&x.slot===b.slot)busy[x.team]=1;});
+      for(var i=0;i<TEAMS;i++){
+        var c=((ptr-1+i)%TEAMS)+1;
+        if(!busy[c]){team=c;ptr=c%TEAMS+1;break;}
+      }
+      if(b.type==="V"&&team){val[b.tkey]=team;vals.push({tkey:b.tkey,team:team});}
+    }
+    if(team){b.team=team;assign.push({id:b.id,team:team});}
+  });
+  return {assign:assign,vals:vals,ptr:ptr};
+}
+
+/* ---------- Datos (API en Netlify) ---------- */
+function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
+function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){}}
+function ssGet(k){try{return sessionStorage.getItem(k)||"";}catch(e){return "";}}
+function ssSet(k,v){try{if(v)sessionStorage.setItem(k,v);else sessionStorage.removeItem(k);}catch(e){}}
+async function api(path,opts){
+  opts=opts||{};
+  var h={"content-type":"application/json"};
+  if(S.code)h["x-code"]=S.code;
+  if(S.adminPass)h["x-admin"]=S.adminPass;
+  var r=await fetch("/api/"+path,{method:opts.method||"GET",headers:h,body:opts.body?JSON.stringify(opts.body):undefined});
+  var data=null;try{data=await r.json();}catch(e){}
+  if(!r.ok){var er=new Error((data&&data.error)||("Error "+r.status));er.status=r.status;er.data=data;throw er;}
+  return data;
+}
+async function refresh(){
+  try{
+    var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
+    S.needCode=false;S.err="";
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};
+    S.rev={config:d.config.rev,teams:d.teams.rev,teachers:d.teachers.rev,bookings:d.bookings.rev};
+  }catch(e){
+    if(e.status===401&&e.data&&e.data.needCode){S.needCode=true;S.err=S.code?"Código incorrecto.":"";}
+    else S.err="No se pudieron cargar los datos. Comprueba la conexión.";
+  }
+  S.loaded=true;
+}
+function collData(n){return n==="bookings"?S.bookings:n==="teachers"?S.teachers:n==="teams"?S.teams:S.config;}
+async function saveColl(n){
+  var r=await api("admin",{method:"POST",body:{key:n,baseRev:S.rev[n],value:collData(n)}});
+  S.rev[n]=r.rev;
+}
+async function saveAll(names){for(var i=0;i<names.length;i++)await saveColl(names[i]);}
+function newId(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36);}
+function ensureTeacher(name){
+  var k=tkeyOf(name);
+  if(!S.teachers[k])S.teachers[k]={tkey:k,name:name.trim(),valTeam:null};
+  return k;
+}
+function applyPlan(){
+  var plan=planAssign(S.bookings,S.teachers,Math.min(TEAMS,Math.max(1,Number(S.config.nextTeam)||1)));
+  plan.vals.forEach(function(v){S.teachers[v.tkey].valTeam=v.team;});
+  plan.assign.forEach(function(a){var b=S.bookings.filter(function(x){return x.id===a.id;})[0];if(b)b.team=a.team;});
+  var dirty=[];
+  if(plan.vals.length)dirty.push("teachers");
+  if(plan.assign.length)dirty.push("bookings");
+  if(plan.assign.length||plan.ptr!==S.config.nextTeam){S.config={nextTeam:plan.ptr,updatedAt:Date.now()};dirty.push("config");}
+  return {n:plan.assign.length,dirty:dirty};
+}
+async function assignPending(){var r=applyPlan();await saveAll(r.dirty);return r.n;}
+async function addBookings(items){
+  var added=0,dup=0,dirty={};
+  items.forEach(function(it){
+    var before=Object.keys(S.teachers).length;
+    var k=ensureTeacher(it.name);
+    if(Object.keys(S.teachers).length>before)dirty.teachers=1;
+    var exists=S.bookings.some(function(b){return b.tkey===k&&b.date===it.date&&b.slot===it.slot&&b.type===it.type;});
+    if(exists){dup++;return;}
+    S.bookings.push({id:newId(),date:it.date,slot:it.slot,type:it.type,teacher:S.teachers[k].name,tkey:k,team:null,createdAt:Date.now()+added});
+    added++;dirty.bookings=1;
+  });
+  var r=applyPlan();
+  r.dirty.forEach(function(n){dirty[n]=1;});
+  await saveAll(["teachers","bookings","config"].filter(function(n){return dirty[n];}));
+  return {added:added,dup:dup,assigned:r.n};
+}
+
+/* ---------- Lectura de fechas y franjas ---------- */
+function parseDate(t){
+  var m=/^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(t);var y,mo,d;
+  if(m){y=+m[1];mo=+m[2];d=+m[3];}
+  else{m=/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?$/.exec(t);if(!m)return null;d=+m[1];mo=+m[2];y=m[3]?+m[3]:new Date().getFullYear();if(y<100)y+=2000;}
+  var dt=new Date(y,mo-1,d);if(dt.getMonth()!==mo-1||dt.getDate()!==d)return null;
+  return y+"-"+pad(mo)+"-"+pad(d);
+}
+function parseSlot(t){
+  var s=String(t).trim().replace(/[ªº°\.]$/,"").replace(".",":");
+  if(/^[1-6]$/.test(s))return +s;
+  var m=/^(\d{1,2}):(\d{2})/.exec(s);if(m){var key=(+m[1])+":"+m[2];if(SLOT_START[key])return SLOT_START[key];}
+  return null;
+}
+function parseBulk(text){
+  var out=[],errs=[];
+  text.split(/\r?\n/).map(function(l){return l.trim();}).forEach(function(line,i){
+    if(!line)return;
+    var p=line.split(/[;,\t]/).map(function(x){return x.trim();});
+    if(p.length<4){errs.push("Línea "+(i+1)+": faltan datos (fecha, franja, profesor, tipo).");return;}
+    var date=parseDate(p[0]),slot=parseSlot(p[1]),type=p[p.length-1].toUpperCase(),name=p.slice(2,p.length-1).join(", ");
+    if(!date){errs.push("Línea "+(i+1)+": fecha no válida («"+p[0]+"»).");return;}
+    if(!slot){errs.push("Línea "+(i+1)+": franja no válida («"+p[1]+"»). Usa 1 a 6 o la hora de inicio.");return;}
+    if(type!=="E"&&type!=="V"){errs.push("Línea "+(i+1)+": el tipo debe ser E o V.");return;}
+    if(!name){errs.push("Línea "+(i+1)+": falta el nombre del profesor.");return;}
+    out.push({date:date,slot:slot,type:type,name:name});
+  });
+  return {items:out,errs:errs};
+}
+
+/* ---------- Permisos de vista ---------- */
+function vTeamOf(k){var t=S.teachers[k];if(t&&t.valTeam)return t.valTeam;var b=S.bookings.filter(function(x){return x.tkey===k&&x.type==="V"&&x.team;})[0];return b?b.team:null;}
+function canEditPres(k){
+  if(S.admin)return true;if(!S.team)return false;
+  return vTeamOf(k)===S.team;
+}
+function canSee(k){
+  if(S.admin)return true;if(!S.team)return false;
+  if(vTeamOf(k)===S.team)return true;
+  return S.bookings.some(function(b){return b.tkey===k&&b.type==="E"&&b.team===S.team;});
+}
+
+/* ---------- Vistas ---------- */
+function teamChip(n,mine){
+  if(!n)return '<span class="team none">Sin asignar</span>';
+  return '<span class="team'+(mine?" mine":"")+'">Equipo '+n+'</span>';
+}
+function membersOf(n){var t=S.teams[n];return t&&t.members?t.members:"";}
+function presView(p){
+  return '<dl class="pres">'+
+    '<dt>Objetivo</dt><dd>'+esc(p.goal||"—")+'</dd>'+
+    '<dt>Frecuencia</dt><dd>'+(p.days?esc(p.days)+" días por semana":"—")+'</dd>'+
+    '<dt>Plan de entrenamiento</dt><dd>'+esc(p.plan||"—")+'</dd>'+
+    (p.notes?'<dt>Precauciones y observaciones</dt><dd>'+esc(p.notes)+'</dd>':'')+
+    '<dt>Redactada por</dt><dd>Equipo '+esc(p.team||"—")+(p.updatedAt?' · '+fmtShort(p.updatedAt):'')+'</dd></dl>';
+}
+function presEditor(k){
+  var p=S.prescriptions[k]||{},t=S.teachers[k]||{};
+  var days="";for(var i=1;i<=5;i++)days+='<option value="'+i+'"'+(String(p.days||3)===String(i)?" selected":"")+'>'+i+'</option>';
+  return '<div class="editor" id="presTop">'+
+    '<h4>Prescripción para '+esc(t.name||k)+'</h4>'+
+    '<label for="pe-goal">Objetivo</label>'+
+    '<input id="pe-goal" data-keep list="goals" autocomplete="off" value="'+esc(p.goal||"")+'" placeholder="Por ejemplo: mejorar la condición física">'+
+    '<datalist id="goals">'+GOALS.map(function(g){return '<option value="'+esc(g)+'">';}).join("")+'</datalist>'+
+    '<label for="pe-days">Días de entrenamiento por semana</label><select id="pe-days" data-keep>'+days+'</select>'+
+    '<label for="pe-plan">Plan de entrenamiento</label>'+
+    '<textarea id="pe-plan" data-keep rows="8" placeholder="Sesión A: sentadilla goblet 3x12, press de banca con mancuernas 3x10, remo con banda 3x12…">'+esc(p.plan||"")+'</textarea>'+
+    '<label for="pe-notes">Precauciones y observaciones</label>'+
+    '<textarea id="pe-notes" data-keep rows="3" placeholder="Molestias, límites de carga, ejercicios a evitar…">'+esc(p.notes||"")+'</textarea>'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="savePres" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>Guardar prescripción</button>'+
+    '<button class="btn" data-act="cancelEdit">Cancelar</button></div></div>';
+}
+function sessionCard(b){
+  var t=S.teachers[b.tkey]||{},p=S.prescriptions[b.tkey],tag=dayTag(b.date),extra="";
+  if(b.type==="V"){
+    extra='<div class="pr-row">'+(p?'<span class="ok">Prescripción guardada</span>':'<span class="pending">Prescripción pendiente</span>')+
+      (canEditPres(b.tkey)?' <button class="btn sm" data-act="edit" data-k="'+esc(b.tkey)+'">'+(p?"Editar":"Escribir prescripción")+'</button>':'')+'</div>';
+  }else if(p&&canSee(b.tkey)){
+    var open=S.open[b.id];
+    extra='<div class="pr-row"><button class="btn sm" data-act="toggle" data-id="'+esc(b.id)+'">'+(open?"Ocultar":"Ver")+' prescripción</button></div>'+(open?presView(p):"");
+  }else{
+    var vt=vTeamOf(b.tkey);
+    extra='<p class="muted small" style="margin-top:.5rem">'+(vt?"Todavía no hay prescripción. La valoración la hace el equipo "+vt+".":"Este profesor aún no tiene valoración registrada.")+'</p>';
+  }
+  return '<article class="sess"><div><span class="time">'+SLOTS[b.slot]+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+    '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
+    (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div></article>';
+}
+function groupByDate(list){
+  var g=[],cur=null;
+  list.forEach(function(b){if(!cur||cur.date!==b.date){cur={date:b.date,items:[]};g.push(cur);}cur.items.push(b);});
+  return g;
+}
+function dayHead(d){var t=dayTag(d);return '<h3 class="day">'+(t?'<span class="dl">'+t+'</span>':'')+'<span>'+esc(fmtDate(d))+'</span></h3>';}
+
+function vMine(){
+  if(!S.team){
+    var btns="";for(var i=1;i<=TEAMS;i++)btns+='<button data-act="pickTeam" data-n="'+i+'">'+i+'</button>';
+    return '<h2>¿Qué equipo eres?</h2><p class="muted">Elige tu número de equipo. Se queda guardado en este móvil y puedes cambiarlo arriba.</p><div class="pick">'+btns+'</div>';
+  }
+  var today=todayStr();
+  var mine=S.bookings.filter(function(b){return b.team===S.team;}).sort(cmp);
+  var up=mine.filter(function(b){return b.date>=today;}),past=mine.filter(function(b){return b.date<today;});
+  var html='<p class="eyebrow">Equipo '+S.team+'</p><h2 style="margin-top:0">'+(membersOf(S.team)?esc(membersOf(S.team)):"Tu agenda")+'</h2>';
+  html+='<h2>Próximas sesiones</h2>';
+  if(!up.length)html+='<div class="card muted">Todavía no tienes sesiones asignadas. Aparecerán aquí cuando el profesorado reserve y se reparta la rotación.</div>';
+  groupByDate(up).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
+  var keys={};
+  S.bookings.forEach(function(b){if(b.type==="V"&&b.team===S.team)keys[b.tkey]=1;});
+  Object.keys(S.teachers).forEach(function(k){if(S.teachers[k].valTeam===S.team)keys[k]=1;});
+  var ks=Object.keys(keys).sort(function(a,b){return (S.teachers[a]?S.teachers[a].name:a).localeCompare(S.teachers[b]?S.teachers[b].name:b,"es");});
+  if(ks.length){
+    html+='<h2>Prescripciones a tu cargo</h2><p class="muted small">Estos profesores los valora siempre tu equipo. Su prescripción la ve después el equipo que los entrene.</p>';
+    ks.forEach(function(k){
+      var t=S.teachers[k]||{name:k},p=S.prescriptions[k];
+      html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(p?'<span class="ok">Guardada · '+fmtShort(p.updatedAt||Date.now())+'</span>':'<span class="pending">Pendiente</span>')+'</div>';
+      if(S.editing===k)html+=presEditor(k);
+      else html+='<div class="pr-row"><button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar prescripción":"Escribir prescripción")+'</button></div>'+(p?presView(p):"");
+      html+='</div>';
+    });
+  }
+  if(past.length){
+    html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' sesiones anteriores ('+past.length+')</button></div>';
+    if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
+  }
+  return html;
+}
+function vAgenda(){
+  var today=todayStr();
+  var fs=[["all","Todas"],["E","Entrenamientos"],["V","Valoraciones"],["mine","Mi equipo"]];
+  var html='<h2 style="margin-top:0">Agenda general</h2><div class="filters">'+fs.map(function(f){return '<button class="chip" data-act="filter" data-f="'+f[0]+'" aria-pressed="'+(S.filter===f[0])+'">'+f[1]+'</button>';}).join("")+'</div>';
+  var list=S.bookings.filter(function(b){
+    if(S.filter==="E"||S.filter==="V")return b.type===S.filter;
+    if(S.filter==="mine")return S.team&&b.team===S.team;
+    return true;
+  }).sort(cmp);
+  var up=list.filter(function(b){return b.date>=today;}),past=list.filter(function(b){return b.date<today;});
+  if(!up.length)html+='<div class="card muted">No hay sesiones próximas con este filtro.</div>';
+  groupByDate(up).forEach(function(g){
+    html+=dayHead(g.date)+g.items.map(function(b){
+      return '<article class="sess"><div><span class="time">'+SLOTS[b.slot]+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+        '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div></article>';
+    }).join("");
+  });
+  if(past.length)html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' anteriores ('+past.length+')</button></div>';
+  if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){
+    html+=dayHead(g.date)+g.items.map(function(b){return '<article class="sess"><div><span class="time">'+SLOTS[b.slot]+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div></article>';}).join("");
+  });
+  return html;
+}
+function vTeachers(){
+  var ks=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+  var html='<h2 style="margin-top:0">Profesorado</h2>';
+  if(!ks.length)return html+'<div class="card muted">Aún no hay profesorado registrado. Se crea solo al importar las reservas.</div>';
+  ks.forEach(function(k){
+    var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
+    var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
+    html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">Valora el equipo '+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+
+      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+' · '+(p?'prescripción guardada':'sin prescripción')+'</p>';
+    if(S.editing===k&&canEditPres(k))html+=presEditor(k);
+    else{
+      var btns="";
+      if(p&&canSee(k))btns+='<button class="btn sm" data-act="toggle" data-id="p-'+esc(k)+'">'+(S.open["p-"+k]?"Ocultar":"Ver")+' prescripción</button>';
+      if(canEditPres(k))btns+=' <button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar":"Escribir")+' prescripción</button>';
+      if(btns)html+='<div class="pr-row">'+btns+'</div>';
+      if(p&&canSee(k)&&S.open["p-"+k])html+=presView(p);
+    }
+    html+='</div>';
+  });
+  return html;
+}
+function teamOptions(sel,withNone){
+  var o=withNone?'<option value="">Sin asignar</option>':"";
+  for(var i=1;i<=TEAMS;i++)o+='<option value="'+i+'"'+(Number(sel)===i?" selected":"")+'>Equipo '+i+'</option>';
+  return o;
+}
+function vAdmin(){
+  var today=todayStr();
+  var pend=S.bookings.filter(function(b){return !b.team;}).length;
+  var html='<h2 style="margin-top:0">Gestión</h2>';
+  if(!S.bookings.length)html+='<div class="note ok">Empieza pegando las reservas de la semana en «Pegar varias reservas». Cada línea lleva fecha, franja, profesor y tipo (E o V). Los equipos se reparten solos.</div>';
+
+  html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
+    '<p class="muted small">Cada entrenamiento nuevo pasa al siguiente equipo, empezando por el 1. Las valoraciones van siempre al equipo que ya valoró a ese profesor. Si un equipo ya está ocupado en esa franja, se salta al siguiente.</p>'+
+    '<div class="row"><label for="nextSel" style="margin:0">Próximo equipo</label><select id="nextSel" data-change="next">'+teamOptions(S.config.nextTeam,false)+'</select>'+
+    '<button class="btn primary" data-act="assign"'+((S.busy||!pend)?" disabled":"")+'>Asignar pendientes ('+pend+')</button></div></div>';
+
+  html+='<div class="card"><h3>Añadir una reserva</h3><div class="grid2">'+
+    '<div><label for="f-date">Fecha</label><input id="f-date" data-keep type="date" value="'+today+'"></div>'+
+    '<div><label for="f-slot">Franja</label><select id="f-slot" data-keep>'+SLOTS.map(function(s,i){return i?'<option value="'+i+'">'+i+' · '+s+'</option>':"";}).join("")+'</select></div>'+
+    '<div><label for="f-teacher">Profesor</label><input id="f-teacher" data-keep list="tlist" autocomplete="off" placeholder="Nombre como en la app de reservas">'+
+    '<datalist id="tlist">'+Object.keys(S.teachers).map(function(k){return '<option value="'+esc(S.teachers[k].name)+'">';}).join("")+'</datalist></div>'+
+    '<div><label for="f-type">Tipo</label><select id="f-type" data-keep><option value="E">E · Entrenamiento</option><option value="V">V · Valoración</option></select></div></div>'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="addOne"'+(S.busy?" disabled":"")+'>Añadir y asignar</button></div></div>';
+
+  html+='<div class="card"><h3>Pegar varias reservas</h3>'+
+    '<p class="muted small">Una por línea: <code>fecha, franja, profesor, tipo</code>. La franja es 1 a 6 (7:55 es la 1) o la hora de inicio. Ejemplo: <code>12/11, 3, Laura J., E</code></p>'+
+    '<label for="f-bulk" class="small">Reservas</label><textarea id="f-bulk" data-keep rows="6" placeholder="12/11, 3, Laura J., E&#10;12/11, 3, Marta F., E&#10;13/11, 5, Alejandro S., V"></textarea>'+
+    (S.bulkErr.length?'<div class="note err small">'+S.bulkErr.map(esc).join("<br>")+'</div>':'')+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="addBulk"'+(S.busy?" disabled":"")+'>Importar y asignar</button></div></div>';
+
+  var rows="";
+  for(var n=1;n<=TEAMS;n++)rows+='<span>Equipo '+n+'</span><input id="tm-'+n+'" data-keep aria-label="Integrantes del equipo '+n+'" placeholder="Nombres de la pareja" value="'+esc(membersOf(n))+'">';
+  html+='<div class="card"><h3>Equipos</h3><div class="members" style="margin-top:.6rem">'+rows+'</div>'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="saveTeams"'+(S.busy?" disabled":"")+'>Guardar equipos</button></div></div>';
+
+  var ks=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+  if(ks.length){
+    html+='<div class="card"><h3>Equipo de valoración de cada profesor</h3><p class="muted small">Se fija con la primera valoración. Cámbialo aquí si hace falta.</p>';
+    ks.forEach(function(k){html+='<div class="list-row"><span>'+esc(S.teachers[k].name)+'</span><select data-change="valTeam" data-k="'+esc(k)+'" aria-label="Equipo de valoración de '+esc(S.teachers[k].name)+'">'+teamOptions(S.teachers[k].valTeam,true)+'</select></div>';});
+    html+='</div>';
+  }
+
+  var list=S.bookings.slice().sort(cmp).filter(function(b){return S.showPast||b.date>=today;});
+  html+='<div class="card"><div class="row" style="justify-content:space-between"><h3>Reservas</h3><button class="btn sm" data-act="togglePast">'+(S.showPast?"Solo próximas":"Incluir anteriores")+'</button></div>';
+  if(!list.length)html+='<p class="muted small">No hay reservas próximas.</p>';
+  list.forEach(function(b){
+    var clash=b.team&&S.bookings.some(function(x){return x.id!==b.id&&x.team===b.team&&x.date===b.date&&x.slot===b.slot;});
+    html+='<div class="list-row"><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+b.type+'</span>'+
+      '<div class="small muted">'+esc(fmtDate(b.date))+' · '+SLOTS[b.slot]+(clash?' <span class="clash">· Choque: el equipo tiene otra sesión a esa hora</span>':'')+'</div></div>'+
+      '<div class="row"><select data-change="bteam" data-id="'+esc(b.id)+'" aria-label="Equipo de la sesión de '+esc(b.teacher)+'">'+teamOptions(b.team,true)+'</select>'+
+      (S.confirmDel===b.id?'<button class="btn sm danger" data-act="delYes" data-id="'+esc(b.id)+'">Borrar</button><button class="btn sm" data-act="delNo">No</button>':'<button class="btn sm" data-act="del" data-id="'+esc(b.id)+'" aria-label="Borrar reserva">Borrar</button>')+'</div></div>';
+  });
+  html+='</div>';
+  return html;
+}
+function banner(){
+  var h="";
+  if(S.err&&!S.needCode)h+='<div class="note err">'+esc(S.err)+'</div>';
+  if(S.msg)h+='<div class="note '+(S.msgKind==="err"?"err":"ok")+'" role="status">'+esc(S.msg)+'</div>';
+  return h;
+}
+function vLogin(){
+  return '<h2 style="margin-top:0">Coordinación</h2><div class="card"><p class="muted small">Esta zona es solo para el profesorado que gestiona las reservas y la rotación.</p>'+
+    '<label for="adm-pass">Contraseña</label><input id="adm-pass" data-keep type="password" autocomplete="current-password">'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="login"'+(S.busy?" disabled":"")+'>Entrar</button></div></div>';
+}
+function vCode(){
+  return '<div class="wrap"><header class="top"><p class="eyebrow">IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">Monasfit Equipos</h1></header><main>'+
+    '<div class="card"><h3>Código de acceso</h3><p class="muted small">Pide el código a tu profesor.</p>'+
+    '<label for="code-in">Código</label><input id="code-in" data-keep autocomplete="off" autocapitalize="off">'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="enterCode">Entrar</button></div>'+
+    (S.err?'<div class="note err">'+esc(S.err)+'</div>':'')+'</div></main></div>';
+}
+function view(){
+  if(S.needCode)return vCode();
+  var tabs=TABS.filter(function(t){return t[0]!=="gestion"||S.admin;});
+  var body;
+  if(!S.loaded)body='<p class="muted" style="padding:1.5rem 0">Cargando…</p>';
+  else if(S.tab==="agenda")body=vAgenda();
+  else if(S.tab==="profesorado")body=vTeachers();
+  else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
+  else body=vMine();
+  var opts='<option value="">—</option>';for(var i=1;i<=TEAMS;i++)opts+='<option value="'+i+'"'+(S.team===i?" selected":"")+'>'+i+'</option>';
+  var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
+  return '<div class="wrap"><header class="top"><div class="brand"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>Monasfit Equipos</h1></div>'+
+    '<div class="who"><label for="teamSel">Soy el equipo</label><select id="teamSel" data-change="team">'+opts+'</select></div></div>'+
+    '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+t[1]+'</a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+'</div>';
+}
+function render(){
+  var saved={},act=document.activeElement,fid=act&&act.id,ss=null,se=null,restore=!S.noRestore;
+  S.noRestore=false;
+  $app.querySelectorAll("[data-keep]").forEach(function(el){if(el.id)saved[el.id]=el.value;});
+  if(act&&typeof act.selectionStart==="number"){try{ss=act.selectionStart;se=act.selectionEnd;}catch(e){}}
+  $app.innerHTML=view();
+  if(restore){
+    Object.keys(saved).forEach(function(id){var el=document.getElementById(id);if(el&&el.hasAttribute("data-keep"))el.value=saved[id];});
+    if(fid){var f=document.getElementById(fid);if(f){try{f.focus({preventScroll:true});if(ss!=null&&f.setSelectionRange)f.setSelectionRange(ss,se);}catch(e){}}}
+  }
+  if(S.scrollEditor){S.scrollEditor=false;var ed=document.getElementById("presTop");if(ed)ed.scrollIntoView({block:"center"});}
+}
+
+/* ---------- Acciones ---------- */
+var msgTimer=null;
+function say(text,kind){
+  S.msg=text;S.msgKind=kind||"ok";clearTimeout(msgTimer);
+  if(text)msgTimer=setTimeout(function(){S.msg="";render();},6000);
+}
+function logoutAdmin(){S.admin=false;S.adminPass="";ssSet("monasfit.admin","");if(S.tab==="gestion")S.tab="mi-equipo";}
+async function run(fn,okMsg){
+  if(S.busy)return;
+  S.busy=true;render();
+  var failed=false;
+  try{var r=await fn();say(typeof okMsg==="function"?okMsg(r):(okMsg||""),"ok");}
+  catch(e){
+    failed=true;
+    if(e.status===409)say("Otra persona cambió los datos a la vez. Se han recargado: repite la acción.","err");
+    else if(e.status===403&&S.admin){logoutAdmin();say("La sesión de coordinación ha caducado. Entra de nuevo.","err");}
+    else if(e.status===401||e.status===403)say(e.message,"err");
+    else say("No se pudo guardar. "+(e.message||"Inténtalo de nuevo."),"err");
+  }
+  if(failed)await refresh();
+  S.busy=false;render();
+}
+function val(id){var el=document.getElementById(id);return el?el.value:"";}
+function setTeam(n){S.team=n||null;lsSet("monasfit.team",n?String(n):"");}
+function summary(r){
+  var s=r.added+" reserva"+(r.added===1?"":"s")+" añadida"+(r.added===1?"":"s")+" y "+r.assigned+" asignada"+(r.assigned===1?"":"s")+".";
+  if(r.dup)s+=" "+r.dup+" repetida"+(r.dup===1?"":"s")+" omitida"+(r.dup===1?"":"s")+".";
+  return s;
+}
+var actions={
+  pickTeam:function(d){setTeam(Number(d.n));render();refresh().then(render);},
+  filter:function(d){S.filter=d.f;render();},
+  togglePast:function(){S.showPast=!S.showPast;render();},
+  toggle:function(d){S.open[d.id]=!S.open[d.id];render();},
+  edit:function(d){S.editing=d.k;S.scrollEditor=true;if(S.tab!=="profesorado"&&S.tab!=="mi-equipo")S.tab="mi-equipo";render();},
+  cancelEdit:function(){S.editing=null;render();},
+  savePres:function(d){
+    var k=d.k,t=S.teachers[k]||{name:k},plan=val("pe-plan").trim();
+    if(!plan){say("Escribe el plan de entrenamiento antes de guardar.","err");render();return;}
+    var rec={tkey:k,teacher:t.name,team:S.team||vTeamOf(k)||null,goal:val("pe-goal").trim(),days:Number(val("pe-days"))||3,plan:plan,notes:val("pe-notes").trim()};
+    run(async function(){var r=await api("prescription",{method:"POST",body:rec});S.prescriptions[k]=r;S.editing=null;S.noRestore=true;},"Prescripción guardada.");
+  },
+  login:function(){
+    var p=val("adm-pass");if(!p)return;
+    run(async function(){
+      S.adminPass=p;
+      try{await api("admin-check");}catch(e){S.adminPass="";throw e;}
+      S.admin=true;ssSet("monasfit.admin",p);
+      await refresh();S.tab="gestion";S.noRestore=true;
+    },"Sesión de coordinación iniciada.");
+  },
+  logout:function(){logoutAdmin();render();refresh().then(render);},
+  enterCode:function(){
+    var c=val("code-in").trim();if(!c)return;
+    S.code=c;lsSet("monasfit.code",c);
+    refresh().then(function(){S.noRestore=!S.needCode;render();});
+  },
+  assign:function(){run(assignPending,function(n){return n+" sesión"+(n===1?"":"es")+" asignada"+(n===1?"":"s")+".";});},
+  addOne:function(){
+    var date=parseDate(val("f-date")),name=val("f-teacher").trim();
+    if(!date){say("Elige una fecha.","err");render();return;}
+    if(!name){say("Escribe el nombre del profesor.","err");render();return;}
+    var it={date:date,slot:Number(val("f-slot")),type:val("f-type"),name:name};
+    run(async function(){var r=await addBookings([it]);S.noRestore=true;return r;},summary);
+  },
+  addBulk:function(){
+    var r=parseBulk(val("f-bulk"));S.bulkErr=r.errs;
+    if(!r.items.length){say(r.errs.length?"Revisa las líneas con error.":"Pega al menos una reserva.","err");render();return;}
+    run(async function(){var res=await addBookings(r.items);if(!r.errs.length)S.noRestore=true;return res;},summary);
+  },
+  saveTeams:function(){
+    run(async function(){
+      var n,c=0;
+      for(n=1;n<=TEAMS;n++){
+        var m=val("tm-"+n).trim();
+        if(m!==membersOf(n)||!S.teams[n]){S.teams[n]={n:n,members:m};c++;}
+      }
+      if(c)await saveColl("teams");
+      return c;
+    },function(c){return c?"Equipos guardados.":"No había cambios.";});
+  },
+  del:function(d){S.confirmDel=d.id;render();},
+  delNo:function(){S.confirmDel=null;render();},
+  delYes:function(d){
+    run(async function(){S.bookings=S.bookings.filter(function(b){return b.id!==d.id;});S.confirmDel=null;await saveColl("bookings");},"Reserva borrada.");
+  }
+};
+var changes={
+  team:function(el){setTeam(el.value?Number(el.value):null);render();refresh().then(render);},
+  next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
+  bteam:function(el){var id=el.dataset.id,t=el.value?Number(el.value):null;run(async function(){var b=S.bookings.filter(function(x){return x.id===id;})[0];if(b)b.team=t;await saveColl("bookings");},"Equipo actualizado.");},
+  valTeam:function(el){var k=el.dataset.k,t=el.value?Number(el.value):null;run(async function(){if(S.teachers[k])S.teachers[k].valTeam=t;await saveColl("teachers");},"Equipo de valoración actualizado.");}
+};
+$app.addEventListener("click",function(e){
+  var b=e.target.closest("[data-act]");if(!b)return;
+  var f=actions[b.dataset.act];if(f)f(b.dataset);
+});
+$app.addEventListener("change",function(e){
+  var el=e.target;if(!el.dataset||!el.dataset.change)return;
+  var f=changes[el.dataset.change];if(f)f(el);
+});
+$app.addEventListener("keydown",function(e){
+  if(e.key!=="Enter")return;
+  if(e.target.id==="code-in")actions.enterCode();
+  else if(e.target.id==="adm-pass")actions.login();
+});
+function readHash(){
+  var h=(location.hash||"").slice(1);
+  if(TABS.some(function(t){return t[0]===h;})){S.tab=h;}
+}
+window.addEventListener("hashchange",function(){readHash();render();window.scrollTo(0,0);});
+
+async function init(){
+  S.code=lsGet("monasfit.code");
+  var t=lsGet("monasfit.team");if(t)S.team=Number(t)||null;
+  S.adminPass=ssGet("monasfit.admin");
+  readHash();render();
+  if(S.adminPass){try{await api("admin-check");S.admin=true;}catch(e){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");}}
+  await refresh();
+  if(S.admin&&!location.hash)S.tab=S.team?"mi-equipo":"gestion";
+  render();
+  function tick(){if(document.hidden||S.busy||S.needCode||!S.loaded)return;refresh().then(render);}
+  setInterval(tick,30000);
+  document.addEventListener("visibilitychange",tick);
+}
+init();
+})();
+</script>
+</body>
+</html>
