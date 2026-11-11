@@ -114,6 +114,24 @@ select{width:auto;max-width:100%}
 .foot{margin:2.5rem 0 0;text-align:center}
 .foot a{color:var(--muted);font-size:.85rem}
 pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
+.wk{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin:.8rem 0 .2rem}
+.wk strong{font-family:var(--display);font-size:1.15rem;text-align:center}
+.slot{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.3rem .7rem;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem .8rem;margin:.4rem 0}
+.slot.full{opacity:.65}
+.slot .info{min-width:0}
+.plazas{font-weight:600;font-size:.9rem}
+.who-in{font-size:.8rem;color:var(--muted);overflow-wrap:anywhere}
+.slot .ask{grid-column:1/-1;border-top:1px dashed var(--line);padding-top:.6rem;margin-top:.2rem}
+.slot .time{white-space:nowrap;font-size:1.15rem}
+.done{border:2px solid var(--accent);background:var(--accent-soft)}
+.done .big{font-family:var(--display);font-size:2rem;font-weight:700;line-height:1.1;margin:.3rem 0 .1rem}
+.avail{overflow-x:auto;margin-top:.6rem}
+.avail table{border-collapse:collapse;min-width:560px;width:100%}
+.avail th,.avail td{border:1px solid var(--line);padding:.35rem;text-align:center;vertical-align:top;font-size:.82rem}
+.avail td input[type=checkbox]{width:1.1rem;height:1.1rem;margin:0 0 .25rem}
+.avail td input[type=text]{font-size:13px;padding:.25rem .35rem;border-radius:6px}
+.tag{display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--line);border-radius:999px;padding:.1rem .3rem .1rem .65rem;font-size:.84rem;margin:.15rem .25rem .15rem 0}
+.tag button{border:0;background:none;cursor:pointer;font-size:1rem;line-height:1;color:var(--muted);padding:.1rem .35rem}
 @media (prefers-reduced-motion:no-preference){.sess,.card{transition:border-color .15s}}
 </style>
 </head>
@@ -126,11 +144,14 @@ var TEAMS=12;
 var SLOTS=[null,"7:55–8:50","8:50–9:45","9:45–10:40","11:10–12:05","12:05–13:00","13:00–13:55"];
 var SLOT_START={"7:55":1,"8:50":2,"9:45":3,"11:10":4,"12:05":5,"13:00":6};
 var GOALS=["Salud general","Reducir grasa corporal","Ganar masa muscular","Mejorar la condición física","Prevenir lesiones o dolor de espalda","Mejorar la movilidad"];
-var TABS=[["mi-equipo","Mi equipo"],["agenda","Agenda"],["profesorado","Profesorado"],["gestion","Gestión"]];
+var TABS=[["mi-equipo","Mi equipo"],["reservar","Reservar"],["agenda","Agenda"],["profesorado","Profesorado"],["gestion","Gestión"]];
 
+var DEF_SET={cap:4,open:{1:[1,2,3,4,5,6],2:[1,2,3,4,5,6],3:[1,2,3,4,5,6],4:[1,2,3,4,5,6],5:[1,2,3,4,5,6]},resp:{},closed:[],horizon:21};
+var SLOT_MIN=[null,475,530,585,670,725,780];
 var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
-  tab:"mi-equipo",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},
-  rev:{config:0,teams:0,teachers:0,bookings:0},
+  tab:"mi-equipo",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
+  rev:{config:0,teams:0,teachers:0,bookings:0,settings:0},
+  name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
   bulkErr:[],noRestore:false,scrollEditor:false};
 
@@ -177,6 +198,8 @@ function lsGet(k){try{return localStorage.getItem(k)||"";}catch(e){return "";}}
 function lsSet(k,v){try{if(v)localStorage.setItem(k,v);else localStorage.removeItem(k);}catch(e){}}
 function ssGet(k){try{return sessionStorage.getItem(k)||"";}catch(e){return "";}}
 function ssSet(k,v){try{if(v)sessionStorage.setItem(k,v);else sessionStorage.removeItem(k);}catch(e){}}
+function loadTokens(){try{return JSON.parse(lsGet("monasfit.tokens")||"{}")||{};}catch(e){return {};}}
+function saveTokens(){lsSet("monasfit.tokens",Object.keys(S.tokens).length?JSON.stringify(S.tokens):"");}
 async function api(path,opts){
   opts=opts||{};
   var h={"content-type":"application/json"};
@@ -192,14 +215,17 @@ async function refresh(){
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     S.needCode=false;S.err="";
     S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};
-    S.rev={config:d.config.rev,teams:d.teams.rev,teachers:d.teachers.rev,bookings:d.bookings.rev};
+    S.settings=(d.settings&&d.settings.data)||DEF_SET;
+    var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
+    Object.keys(S.tokens).forEach(function(id){if(!ids[id]){delete S.tokens[id];ch=true;}});if(ch)saveTokens();
+    S.rev={config:d.config.rev,teams:d.teams.rev,teachers:d.teachers.rev,bookings:d.bookings.rev,settings:d.settings?d.settings.rev:0};
   }catch(e){
     if(e.status===401&&e.data&&e.data.needCode){S.needCode=true;S.err=S.code?"Código incorrecto.":"";}
     else S.err="No se pudieron cargar los datos. Comprueba la conexión.";
   }
   S.loaded=true;
 }
-function collData(n){return n==="bookings"?S.bookings:n==="teachers"?S.teachers:n==="teams"?S.teams:S.config;}
+function collData(n){return n==="bookings"?S.bookings:n==="teachers"?S.teachers:n==="teams"?S.teams:n==="settings"?S.settings:S.config;}
 async function saveColl(n){
   var r=await api("admin",{method:"POST",body:{key:n,baseRev:S.rev[n],value:collData(n)}});
   S.rev[n]=r.rev;
@@ -337,7 +363,7 @@ function dayHead(d){var t=dayTag(d);return '<h3 class="day">'+(t?'<span class="d
 function vMine(){
   if(!S.team){
     var btns="";for(var i=1;i<=TEAMS;i++)btns+='<button data-act="pickTeam" data-n="'+i+'">'+i+'</button>';
-    return '<h2>¿Qué equipo eres?</h2><p class="muted">Elige tu número de equipo. Se queda guardado en este móvil y puedes cambiarlo arriba.</p><div class="pick">'+btns+'</div>';
+    return '<h2>¿Qué equipo eres?</h2><p class="muted">Elige tu número de equipo. Se queda guardado en este móvil y puedes cambiarlo arriba.</p><div class="pick">'+btns+'</div><p style="margin-top:1.4rem"><a class="btn primary" style="text-decoration:none" href="#reservar">Soy profesor o profesora: reservar hora</a></p>';
   }
   var today=todayStr();
   var mine=S.bookings.filter(function(b){return b.team===S.team;}).sort(cmp);
@@ -419,12 +445,14 @@ function vAdmin(){
   var today=todayStr();
   var pend=S.bookings.filter(function(b){return !b.team;}).length;
   var html='<h2 style="margin-top:0">Gestión</h2>';
-  if(!S.bookings.length)html+='<div class="note ok">Empieza pegando las reservas de la semana en «Pegar varias reservas». Cada línea lleva fecha, franja, profesor y tipo (E o V). Los equipos se reparten solos.</div>';
+  if(!S.bookings.length)html+='<div class="note ok">Las reservas llegan solas cuando el profesorado reserva en la pestaña «Reservar». Antes, revisa la disponibilidad y escribe los equipos. Si ya tienes reservas en otra app, pégalas en «Pegar varias reservas».</div>';
 
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada entrenamiento nuevo pasa al siguiente equipo, empezando por el 1. Las valoraciones van siempre al equipo que ya valoró a ese profesor. Si un equipo ya está ocupado en esa franja, se salta al siguiente.</p>'+
     '<div class="row"><label for="nextSel" style="margin:0">Próximo equipo</label><select id="nextSel" data-change="next">'+teamOptions(S.config.nextTeam,false)+'</select>'+
     '<button class="btn primary" data-act="assign"'+((S.busy||!pend)?" disabled":"")+'>Asignar pendientes ('+pend+')</button></div></div>';
+
+  html+=vAvail();
 
   html+='<div class="card"><h3>Añadir una reserva</h3><div class="grid2">'+
     '<div><label for="f-date">Fecha</label><input id="f-date" data-keep type="date" value="'+today+'"></div>'+
@@ -465,6 +493,113 @@ function vAdmin(){
   html+='</div>';
   return html;
 }
+/* ---------- Reservar (profesorado) ---------- */
+function mondayOf(s){var p=s.split("-").map(Number);var w=new Date(p[0],p[1]-1,p[2]).getDay();return addDays(s,w===0?-6:1-w);}
+function nowMin(){var d=new Date();return d.getHours()*60+d.getMinutes();}
+function fmtDay(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{day:"numeric",month:"long"});}
+function bookDone(r){
+  var b=r.booking;
+  return '<div class="card done" role="status"><p class="eyebrow">Reserva confirmada</p><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
+    '<p>'+esc(fmtDate(b.date))+' · '+SLOTS[b.slot]+'</p>'+
+    '<div class="big">'+(b.type==="V"?"Te valora el equipo ":"Te entrena el equipo ")+b.team+'</div>'+
+    (r.members?'<p>'+esc(r.members)+'</p>':'')+
+    (b.type==="V"?'<p class="small">A partir de ahora será siempre este equipo quien te valore.</p>':'')+
+    '<div class="row" style="margin-top:.6rem"><button class="btn sm" data-act="closeDone">Entendido</button></div></div>';
+}
+function slotRow(d,s,wd,st,today,tk){
+  var list=S.bookings.filter(function(b){return b.date===d&&b.slot===s;});
+  var n=list.length,full=n>=st.cap,started=d===today&&nowMin()>=SLOT_MIN[s];
+  var mineHere=!!tk&&list.some(function(b){return b.tkey===tk;});
+  var resp=st.resp[wd+"-"+s];
+  var who=list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
+  var act;
+  if(mineHere)act='<span class="ok">Reservada</span>';
+  else if(started)act='<span class="muted small">Ya empezó</span>';
+  else if(full)act='<span class="muted small">Completa</span>';
+  else act='<button class="btn primary sm" data-act="askBook" data-d="'+d+'" data-s="'+s+'"'+(S.busy?" disabled":"")+'>Reservar</button>';
+  var ask="";
+  if(S.confirmBook&&S.confirmBook.date===d&&S.confirmBook.slot===s){
+    ask='<div class="ask"><p><strong>'+typeName(S.btype)+'</strong> el '+esc(fmtDate(d))+', '+SLOTS[s]+', a nombre de <strong>'+esc(S.name)+'</strong>.</p>'+
+      '<div class="row"><button class="btn primary" data-act="doBook"'+(S.busy?" disabled":"")+'>Confirmar reserva</button><button class="btn" data-act="noBook">Cancelar</button></div></div>';
+    act="";
+  }
+  return '<div class="slot'+((full&&!mineHere)?" full":"")+'"><div><span class="time">'+SLOTS[s]+'</span><span class="slotn">Franja '+s+'</span></div>'+
+    '<div class="info"><span class="plazas">'+n+'/'+st.cap+' plazas</span>'+(resp?'<div class="small muted">Profesor responsable: '+esc(resp)+'</div>':'')+(who?'<div class="who-in">'+who+'</div>':'')+'</div>'+
+    '<div class="act">'+act+'</div>'+ask+'</div>';
+}
+function vReservar(){
+  var st=S.settings||DEF_SET,today=todayStr(),last=addDays(today,st.horizon);
+  var base=mondayOf(addDays(today,S.weekOff*7));
+  var tk=S.name.trim().length>=2?tkeyOf(S.name):"";
+  var html='<h2 style="margin-top:0">Reserva tu hora</h2><p class="muted">Pon tu nombre, elige el tipo de sesión y una franja libre. Al reservar verás al momento qué equipo te atiende.</p>';
+  if(S.lastBook)html+=bookDone(S.lastBook);
+  var names=Object.keys(S.teachers).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
+  html+='<div class="card"><label for="bk-name" style="margin-top:0">Tu nombre</label>'+
+    '<input id="bk-name" data-keep data-change="bkname" list="tl2" autocomplete="off" value="'+esc(S.name)+'" placeholder="Por ejemplo: Laura J.">'+
+    '<datalist id="tl2">'+names.map(function(n){return '<option value="'+esc(n)+'">';}).join("")+'</datalist>'+
+    '<p class="muted small" style="margin-top:.3rem">Escríbelo siempre igual, para que se reconozca tu equipo de valoración.</p>'+
+    '<label>¿Qué necesitas?</label><div class="filters">'+
+    '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button>'+
+    '<button class="chip" data-act="btype" data-t="V" aria-pressed="'+(S.btype==="V")+'">Valoración (V)</button></div>'+
+    '<p class="muted small">'+(S.btype==="V"?"La valoración de tu composición corporal la hace siempre el mismo equipo. Si ya te valoraron, volverá a ser ese equipo.":"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p></div>';
+
+  var mine=S.bookings.filter(function(b){return b.date>=today&&((tk&&b.tkey===tk)||S.tokens[b.id]);}).sort(cmp);
+  if(mine.length){
+    html+='<div class="card"><h3>Mis reservas</h3>';
+    mine.forEach(function(b){
+      var can=!!S.tokens[b.id];
+      html+='<div class="list-row"><div class="what"><strong>'+esc(fmtDate(b.date))+'</strong><span class="badge b-'+b.type+'">'+b.type+'</span>'+
+        '<div class="small muted">'+SLOTS[b.slot]+' · '+(b.team?'Equipo '+b.team+(membersOf(b.team)?' · '+esc(membersOf(b.team)):''):'Sin asignar')+'</div></div>'+
+        '<div class="row">'+(can?(S.confirmCancel===b.id?'<button class="btn sm danger" data-act="doCancel" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>Sí, cancelar</button><button class="btn sm" data-act="noCancel">No</button>':'<button class="btn sm" data-act="askCancel" data-id="'+esc(b.id)+'">Cancelar</button>'):'')+'</div></div>';
+    });
+    html+='</div>';
+  }
+
+  html+='<div class="wk"><button class="btn sm" data-act="wkPrev"'+(S.weekOff>0?"":" disabled")+'>← Anterior</button><strong>Semana del '+esc(fmtDay(base))+'</strong>'+
+    '<button class="btn sm" data-act="wkNext"'+(addDays(base,7)<=last?"":" disabled")+'>Siguiente →</button></div>';
+  var shown=0;
+  for(var i=0;i<5;i++){
+    var d=addDays(base,i);if(d<today||d>last)continue;
+    var wd=i+1,open=st.open[wd]||[];shown++;
+    html+=dayHead(d);
+    if(st.closed.indexOf(d)>=0){html+='<div class="card muted small">Día cerrado.</div>';continue;}
+    var vis=open.filter(function(sl){return st.closed.indexOf(d+"#"+sl)<0;});
+    if(!vis.length){html+='<div class="card muted small">No hay franjas disponibles este día.</div>';continue;}
+    vis.forEach(function(sl){html+=slotRow(d,sl,wd,st,today,tk);});
+  }
+  if(!shown)html+='<div class="card muted">No quedan días reservables esta semana.</div>';
+  return html;
+}
+function sdGet(){if(!S.sd)S.sd=JSON.parse(JSON.stringify(S.settings||DEF_SET));return S.sd;}
+function vAvail(){
+  var sd=S.sd||S.settings||DEF_SET,dn=["Lunes","Martes","Miércoles","Jueves","Viernes"];
+  var cap="",wk="",c,w,sl,d;
+  for(c=1;c<=TEAMS;c++)cap+='<option value="'+c+'"'+(sd.cap===c?" selected":"")+'>'+c+'</option>';
+  for(w=1;w<=8;w++)wk+='<option value="'+w+'"'+(Math.round(sd.horizon/7)===w?" selected":"")+'>'+w+' semana'+(w>1?"s":"")+'</option>';
+  var html='<div class="card"><h3>Disponibilidad para reservar</h3>'+
+    '<p class="muted small">Marca en qué franjas puede reservar el profesorado cada día y, si quieres, el profesor responsable de esa franja.</p>'+
+    (S.sd?'<div class="note small">Tienes cambios sin guardar.</div>':'')+
+    '<div class="row"><label for="sd-cap" style="margin:0">Plazas por franja</label><select id="sd-cap" data-change="sdCap">'+cap+'</select>'+
+    '<label for="sd-wk" style="margin:0">Se puede reservar con</label><select id="sd-wk" data-change="sdWeeks">'+wk+'</select><span class="muted small">de antelación</span></div>'+
+    '<div class="avail"><table><thead><tr><th>Franja</th>'+dn.map(function(x){return '<th>'+x+'</th>';}).join("")+'</tr></thead><tbody>';
+  for(sl=1;sl<=6;sl++){
+    html+='<tr><th scope="row">'+SLOTS[sl]+'</th>';
+    for(d=1;d<=5;d++){
+      var on=(sd.open[d]||[]).indexOf(sl)>=0;
+      html+='<td><input type="checkbox" data-change="sdOpen" data-d="'+d+'" data-s="'+sl+'" aria-label="'+dn[d-1]+' '+SLOTS[sl]+' reservable"'+(on?" checked":"")+'>'+
+        '<input type="text" id="rs-'+d+'-'+sl+'" data-keep maxlength="40" placeholder="Responsable" aria-label="Profesor responsable '+dn[d-1]+' '+SLOTS[sl]+'" value="'+esc(sd.resp[d+"-"+sl]||"")+'"></td>';
+    }
+    html+='</tr>';
+  }
+  html+='</tbody></table></div>'+
+    '<label for="cl-date">Cerrar un día o una franja (examen, excursión, festivo…)</label><div class="row"><input id="cl-date" data-keep type="date" style="width:auto">'+
+    '<select id="cl-slot" data-keep aria-label="Qué cerrar"><option value="0">Todo el día</option>'+SLOTS.map(function(t,i){return i?'<option value="'+i+'">Franja '+i+' · '+t+'</option>':"";}).join("")+'</select>'+
+    '<button class="btn sm" data-act="addClosed">Cerrar</button></div>'+
+    '<div style="margin-top:.4rem">'+sd.closed.map(function(x){var lab=esc(fmtDate(x.slice(0,10)))+(x.length>10?' · franja '+x.slice(11)+' ('+SLOTS[Number(x.slice(11))]+')':' · todo el día');return '<span class="tag">'+lab+'<button data-act="rmClosed" data-d="'+x+'" aria-label="Volver a abrir '+lab+'">×</button></span>';}).join("")+'</div>'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="saveSet"'+(S.busy?" disabled":"")+'>Guardar disponibilidad</button></div></div>';
+  return html;
+}
+
 function banner(){
   var h="";
   if(S.err&&!S.needCode)h+='<div class="note err">'+esc(S.err)+'</div>';
@@ -488,6 +623,7 @@ function view(){
   var tabs=TABS.filter(function(t){return t[0]!=="gestion"||S.admin;});
   var body;
   if(!S.loaded)body='<p class="muted" style="padding:1.5rem 0">Cargando…</p>';
+  else if(S.tab==="reservar")body=vReservar();
   else if(S.tab==="agenda")body=vAgenda();
   else if(S.tab==="profesorado")body=vTeachers();
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
@@ -508,6 +644,7 @@ function render(){
     Object.keys(saved).forEach(function(id){var el=document.getElementById(id);if(el&&el.hasAttribute("data-keep"))el.value=saved[id];});
     if(fid){var f=document.getElementById(fid);if(f){try{f.focus({preventScroll:true});if(ss!=null&&f.setSelectionRange)f.setSelectionRange(ss,se);}catch(e){}}}
   }
+  if(S.scrollTop){S.scrollTop=false;window.scrollTo(0,0);}
   if(S.scrollEditor){S.scrollEditor=false;var ed=document.getElementById("presTop");if(ed)ed.scrollIntoView({block:"center"});}
 }
 
@@ -527,7 +664,7 @@ async function run(fn,okMsg){
     failed=true;
     if(e.status===409)say("Otra persona cambió los datos a la vez. Se han recargado: repite la acción.","err");
     else if(e.status===403&&S.admin){logoutAdmin();say("La sesión de coordinación ha caducado. Entra de nuevo.","err");}
-    else if(e.status===401||e.status===403)say(e.message,"err");
+    else if(e.status===401||e.status===403||e.status===422||e.status===503)say(e.message,"err");
     else say("No se pudo guardar. "+(e.message||"Inténtalo de nuevo."),"err");
   }
   if(failed)await refresh();
@@ -592,6 +729,55 @@ var actions={
       return c;
     },function(c){return c?"Equipos guardados.":"No había cambios.";});
   },
+  btype:function(d){S.btype=d.t;S.confirmBook=null;render();},
+  wkPrev:function(){S.weekOff=Math.max(0,S.weekOff-1);S.confirmBook=null;render();},
+  wkNext:function(){S.weekOff++;S.confirmBook=null;render();},
+  askBook:function(d){
+    var n=val("bk-name").trim().replace(/\s+/g," ");
+    if(n.length<2){say("Escribe tu nombre antes de reservar.","err");render();return;}
+    S.name=n;lsSet("monasfit.name",n);S.confirmBook={date:d.d,slot:Number(d.s)};render();
+  },
+  noBook:function(){S.confirmBook=null;render();},
+  closeDone:function(){S.lastBook=null;render();},
+  doBook:function(){
+    var c=S.confirmBook;if(!c)return;
+    var nm=val("bk-name").trim().replace(/\s+/g," ");if(nm.length>=2&&nm!==S.name){S.name=nm;lsSet("monasfit.name",nm);}
+    run(async function(){
+      try{
+        var r=await api("book",{method:"POST",body:{name:S.name,type:S.btype,date:c.date,slot:c.slot}});
+        S.tokens[r.booking.id]=r.token;saveTokens();S.lastBook=r;S.confirmBook=null;S.scrollTop=true;
+        await refresh();
+      }catch(e){S.confirmBook=null;throw e;}
+    },"");
+  },
+  askCancel:function(d){S.confirmCancel=d.id;render();},
+  noCancel:function(){S.confirmCancel=null;render();},
+  doCancel:function(d){
+    var tok=S.tokens[d.id];
+    run(async function(){
+      try{
+        await api("cancel",{method:"POST",body:{id:d.id,token:tok}});
+        delete S.tokens[d.id];saveTokens();if(S.lastBook&&S.lastBook.booking.id===d.id)S.lastBook=null;
+        S.confirmCancel=null;await refresh();
+      }catch(e){S.confirmCancel=null;throw e;}
+    },"Reserva cancelada.");
+  },
+  addClosed:function(){
+    var dt=parseDate(val("cl-date"));
+    if(!dt){say("Elige el día que quieres cerrar.","err");render();return;}
+    var sl=Number(val("cl-slot"))||0,key=sl?dt+"#"+sl:dt,sd=sdGet();
+    if(sd.closed.indexOf(key)<0){sd.closed.push(key);sd.closed.sort();}
+    var n=S.bookings.filter(function(b){return b.date===dt&&(!sl||b.slot===sl);}).length;
+    if(n)say("Ojo: ya hay "+n+" reserva"+(n===1?"":"s")+" en "+(sl?"esa franja":"ese día")+". Seguirán ahí hasta que las borres en «Reservas».","err");
+    render();
+  },
+  rmClosed:function(d){var sd=sdGet();sd.closed=sd.closed.filter(function(x){return x!==d.d;});render();},
+  saveSet:function(){
+    var sd=sdGet(),resp={},d,sl;
+    for(d=1;d<=5;d++)for(sl=1;sl<=6;sl++){var t=val("rs-"+d+"-"+sl).trim();if(t)resp[d+"-"+sl]=t;}
+    var v={cap:sd.cap,open:sd.open,resp:resp,closed:sd.closed,horizon:sd.horizon};
+    run(async function(){S.settings=v;await saveColl("settings");S.sd=null;},"Disponibilidad guardada.");
+  },
   del:function(d){S.confirmDel=d.id;render();},
   delNo:function(){S.confirmDel=null;render();},
   delYes:function(d){
@@ -599,6 +785,13 @@ var actions={
   }
 };
 var changes={
+  bkname:function(el){S.name=el.value.trim().replace(/\s+/g," ");lsSet("monasfit.name",S.name);},
+  sdCap:function(el){sdGet().cap=Number(el.value);render();},
+  sdWeeks:function(el){sdGet().horizon=Number(el.value)*7;render();},
+  sdOpen:function(el){
+    var sd=sdGet(),d=el.dataset.d,sl=Number(el.dataset.s),a=(sd.open[d]||[]).filter(function(x){return x!==sl;});
+    if(el.checked)a.push(sl);a.sort(function(x,y){return x-y;});sd.open[d]=a;render();
+  },
   team:function(el){setTeam(el.value?Number(el.value):null);render();refresh().then(render);},
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
   bteam:function(el){var id=el.dataset.id,t=el.value?Number(el.value):null;run(async function(){var b=S.bookings.filter(function(x){return x.id===id;})[0];if(b)b.team=t;await saveColl("bookings");},"Equipo actualizado.");},
@@ -624,7 +817,7 @@ function readHash(){
 window.addEventListener("hashchange",function(){readHash();render();window.scrollTo(0,0);});
 
 async function init(){
-  S.code=lsGet("monasfit.code");
+  S.code=lsGet("monasfit.code");S.name=lsGet("monasfit.name");S.tokens=loadTokens();
   var t=lsGet("monasfit.team");if(t)S.team=Number(t)||null;
   S.adminPass=ssGet("monasfit.admin");
   readHash();render();

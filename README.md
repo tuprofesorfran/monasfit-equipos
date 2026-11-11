@@ -22,6 +22,12 @@ Arrastrar la carpeta directamente a Netlify no sirve aquí, porque el servidor n
    - `ACCESS_CODE`: un código que el alumnado escribe al abrir la app. Opcional. Si no la creas, entra cualquiera con el enlace.
 5. Si has creado las variables después del primer deploy, pulsa **Deploys → Trigger deploy → Deploy site**.
 
+## Reservar (profesorado)
+
+- El profesorado entra en `https://monasfit-equipos.netlify.app/#reservar`, escribe su nombre, elige E o V y una franja libre. Al confirmar ve al momento qué equipo le toca.
+- Puede cancelar sus reservas desde el mismo móvil. Otra persona no puede cancelarlas.
+- Las plazas por franja, los días y franjas abiertas, el profesor responsable y los días cerrados se configuran en **Gestión → Disponibilidad para reservar**.
+
 ## Primer uso
 
 1. Abre la web y pulsa **Acceso coordinación** (al pie de la página). Entra con tu contraseña.

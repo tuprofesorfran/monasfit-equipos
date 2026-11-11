@@ -1,10 +1,10 @@
 {
   "name": "monasfit-equipos",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Rotación de equipos y prescripciones del Aula Ateca (IES Monastil)",
+  "description": "Rotación de equipos, reservas y prescripciones del Aula Ateca (IES Monastil)",
   "dependencies": {
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "^10.7.8"
   }
 }
