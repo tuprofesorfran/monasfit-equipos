@@ -9,10 +9,12 @@ export const config = { path: "/api/*" };
 
 const TEAMS = 12;
 const KEYS = ["config", "teams", "teachers", "bookings", "settings"];
+// Franjas en las que el alumnado está en el aula Ateca (se repiten cada semana).
+// Se pueden cambiar en Gestión → Disponibilidad para reservar.
 const DEFAULT_SETTINGS = {
   cap: 4,
-  open: { 1: [1, 2, 3, 4, 5, 6], 2: [1, 2, 3, 4, 5, 6], 3: [1, 2, 3, 4, 5, 6], 4: [1, 2, 3, 4, 5, 6], 5: [1, 2, 3, 4, 5, 6] },
-  resp: {},
+  open: {1:[1,2],2:[1,5,6],3:[1,2,3,4],4:[3,4,5],5:[4,5]},
+  resp: {"1-1":"Fernando","1-2":"Fernando","2-1":"Fernando","2-5":"Fran","2-6":"Fran","3-1":"Fernando","3-2":"Fernando","3-3":"Fran","3-4":"Fran","4-3":"Fran","4-4":"Fran","4-5":"Fran","5-4":"Fernando","5-5":"Fernando"},
   closed: [],
   horizon: 21,
 };

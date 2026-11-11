@@ -16,6 +16,7 @@
   --accent:#0b7a6a; --accent-soft:#d3eee8; --accent-ink:#ffffff;
   --val:#97570a; --val-soft:#f9e8c9;
   --danger:#b3261e; --danger-soft:#fbe0dd; --ok:#27733a;
+  --c-free:#c5efe2; --c-part:#e3efb0; --c-full:#f7d99a; --c-na:#f1e3e1; --c-ink:#14342c; --c-na-ink:#8a7673;
   color-scheme:light;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
@@ -23,13 +24,15 @@
   --fg:#e6efec; --muted:#9bb0a8;
   --accent:#3ecbb2; --accent-soft:#12372f; --accent-ink:#06201a;
   --val:#f2b84b; --val-soft:#3a2d0f;
-  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488; color-scheme:dark}}
+  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488;
+  --c-free:#14463b; --c-part:#3f4a17; --c-full:#5a4210; --c-na:#2a2020; --c-ink:#e6efec; --c-na-ink:#9b8a87; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0e1613; --surface:#16201d; --surface-2:#1f2c28; --line:#2a3a35;
   --fg:#e6efec; --muted:#9bb0a8;
   --accent:#3ecbb2; --accent-soft:#12372f; --accent-ink:#06201a;
   --val:#f2b84b; --val-soft:#3a2d0f;
-  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488; color-scheme:dark}
+  --danger:#ff9087; --danger-soft:#3b1b18; --ok:#7fd488;
+  --c-free:#14463b; --c-part:#3f4a17; --c-full:#5a4210; --c-na:#2a2020; --c-ink:#e6efec; --c-na-ink:#9b8a87; color-scheme:dark}
 
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 var(--body);
@@ -114,6 +117,25 @@ select{width:auto;max-width:100%}
 .foot{margin:2.5rem 0 0;text-align:center}
 .foot a{color:var(--muted);font-size:.85rem}
 pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
+.cal{display:grid;grid-template-columns:3.3rem repeat(5,minmax(0,1fr));gap:4px;margin-top:.6rem}
+.cal-h{text-align:center;padding:.3rem 0;border-radius:8px;font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.cal-h b{display:block;font-family:var(--display);font-size:1.25rem;letter-spacing:0;color:var(--fg)}
+.cal-h.today{background:var(--accent-soft)}
+.cal-t{font-size:.7rem;line-height:1.2;color:var(--muted);font-weight:600;display:flex;flex-direction:column;justify-content:center;font-variant-numeric:tabular-nums}
+.cal-break{grid-column:2/-1;text-align:center;font-size:.76rem;color:var(--c-na-ink);background:var(--c-na);border-radius:8px;padding:.25rem}
+.cell{min-width:0;min-height:60px;padding:.35rem .4rem;border-radius:9px;border:2px solid transparent;text-align:left;font-size:.74rem;line-height:1.25;cursor:pointer;color:var(--c-ink);display:flex;flex-direction:column;gap:.1rem;overflow:hidden}
+.cell.free{background:var(--c-free)}.cell.part{background:var(--c-part)}.cell.full{background:var(--c-full)}
+.cell.na,.cell.past{background:var(--c-na);color:var(--c-na-ink);cursor:default}
+.cell.mine{outline:2px solid var(--accent);outline-offset:-2px}
+.cell.sel{border-color:var(--fg)}
+.cell .cp{font-weight:700;font-size:.82rem}
+.cell .cr{font-size:.68rem;font-weight:600;background:rgba(255,255,255,.55);color:#14342c;border-radius:999px;padding:0 .4rem;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cell .cn{font-size:.64rem;opacity:.85;overflow-wrap:anywhere}
+.cell .ct{margin-top:auto;font-size:.66rem}
+.legend{display:flex;gap:.8rem;flex-wrap:wrap;font-size:.76rem;color:var(--muted);margin:.5rem 0}
+.legend i{display:inline-block;width:.8rem;height:.8rem;border-radius:3px;margin-right:.3rem;vertical-align:-.1em}
+.sel-panel{border:2px solid var(--fg)}
+@media (max-width:560px){.cal{grid-template-columns:2.5rem repeat(5,minmax(0,1fr));gap:3px}.cell{padding:.25rem .25rem;min-height:56px}.cell .cn,.cell .ct{display:none}.cell .cr{font-size:.6rem;padding:0 .25rem}.cell .cp{font-size:.76rem}}
 .wk{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin:.8rem 0 .2rem}
 .wk strong{font-family:var(--display);font-size:1.15rem;text-align:center}
 .slot{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:.3rem .7rem;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:.7rem .8rem;margin:.4rem 0}
@@ -146,12 +168,12 @@ var SLOT_START={"7:55":1,"8:50":2,"9:45":3,"11:10":4,"12:05":5,"13:00":6};
 var GOALS=["Salud general","Reducir grasa corporal","Ganar masa muscular","Mejorar la condición física","Prevenir lesiones o dolor de espalda","Mejorar la movilidad"];
 var TABS=[["mi-equipo","Mi equipo"],["reservar","Reservar"],["agenda","Agenda"],["profesorado","Profesorado"],["gestion","Gestión"]];
 
-var DEF_SET={cap:4,open:{1:[1,2,3,4,5,6],2:[1,2,3,4,5,6],3:[1,2,3,4,5,6],4:[1,2,3,4,5,6],5:[1,2,3,4,5,6]},resp:{},closed:[],horizon:21};
+var DEF_SET={cap:4,open:{1:[1,2],2:[1,5,6],3:[1,2,3,4],4:[3,4,5],5:[4,5]},resp:{"1-1":"Fernando","1-2":"Fernando","2-1":"Fernando","2-5":"Fran","2-6":"Fran","3-1":"Fernando","3-2":"Fernando","3-3":"Fran","3-4":"Fran","4-3":"Fran","4-4":"Fran","4-5":"Fran","5-4":"Fernando","5-5":"Fernando"},closed:[],horizon:21};
 var SLOT_MIN=[null,475,530,585,670,725,780];
 var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   tab:"mi-equipo",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
   rev:{config:0,teams:0,teachers:0,bookings:0,settings:0},
-  name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,
+  name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
   bulkErr:[],noRestore:false,scrollEditor:false};
 
@@ -506,32 +528,50 @@ function bookDone(r){
     (b.type==="V"?'<p class="small">A partir de ahora será siempre este equipo quien te valore.</p>':'')+
     '<div class="row" style="margin-top:.6rem"><button class="btn sm" data-act="closeDone">Entendido</button></div></div>';
 }
-function slotRow(d,s,wd,st,today,tk){
+function wkTitle(base){
+  var p=base.split("-").map(Number),a=new Date(p[0],p[1]-1,p[2]),f=addDays(base,4).split("-").map(Number),e=new Date(f[0],f[1]-1,f[2]);
+  var m=function(d){return d.toLocaleDateString("es-ES",{month:"long"});};
+  return "Semana del "+a.getDate()+(a.getMonth()!==e.getMonth()?" de "+m(a):"")+" al "+e.getDate()+" de "+m(e);
+}
+var DAYABB=["Lun","Mar","Mié","Jue","Vie"];
+function cellInfo(d,s,wd,st,today,last,tk){
+  var open=(st.open[wd]||[]).indexOf(s)>=0;
   var list=S.bookings.filter(function(b){return b.date===d&&b.slot===s;});
-  var n=list.length,full=n>=st.cap,started=d===today&&nowMin()>=SLOT_MIN[s];
-  var mineHere=!!tk&&list.some(function(b){return b.tkey===tk;});
-  var resp=st.resp[wd+"-"+s];
-  var who=list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
-  var act;
-  if(mineHere)act='<span class="ok">Reservada</span>';
-  else if(started)act='<span class="muted small">Ya empezó</span>';
-  else if(full)act='<span class="muted small">Completa</span>';
-  else act='<button class="btn primary sm" data-act="askBook" data-d="'+d+'" data-s="'+s+'"'+(S.busy?" disabled":"")+'>Reservar</button>';
-  var ask="";
-  if(S.confirmBook&&S.confirmBook.date===d&&S.confirmBook.slot===s){
-    ask='<div class="ask"><p><strong>'+typeName(S.btype)+'</strong> el '+esc(fmtDate(d))+', '+SLOTS[s]+', a nombre de <strong>'+esc(S.name)+'</strong>.</p>'+
-      '<div class="row"><button class="btn primary" data-act="doBook"'+(S.busy?" disabled":"")+'>Confirmar reserva</button><button class="btn" data-act="noBook">Cancelar</button></div></div>';
-    act="";
-  }
-  return '<div class="slot'+((full&&!mineHere)?" full":"")+'"><div><span class="time">'+SLOTS[s]+'</span><span class="slotn">Franja '+s+'</span></div>'+
-    '<div class="info"><span class="plazas">'+n+'/'+st.cap+' plazas</span>'+(resp?'<div class="small muted">Profesor responsable: '+esc(resp)+'</div>':'')+(who?'<div class="who-in">'+who+'</div>':'')+'</div>'+
-    '<div class="act">'+act+'</div>'+ask+'</div>';
+  var r={d:d,s:s,wd:wd,list:list,n:list.length,resp:st.resp[wd+"-"+s]||"",state:"na"};
+  if(!open||d<today||d>last||st.closed.indexOf(d)>=0||st.closed.indexOf(d+"#"+s)>=0){r.state="na";return r;}
+  if(d===today&&nowMin()>=SLOT_MIN[s]){r.state="past";return r;}
+  if(tk&&list.some(function(b){return b.tkey===tk;})){r.mine=true;}
+  r.state=r.n>=st.cap?"full":(r.n>0?"part":"free");
+  return r;
+}
+function calCell(c,st){
+  var cls="cell "+c.state+(c.mine?" mine":"")+((S.confirmBook&&S.confirmBook.date===c.d&&S.confirmBook.slot===c.s)?" sel":"");
+  if(c.state==="na")return '<div class="'+cls+'" aria-label="No disponible"><span class="ct">'+'<span aria-hidden="true">⊘</span></span></div>';
+  if(c.state==="past")return '<div class="'+cls+'"><span class="ct">Ya empezó</span></div>';
+  var who=c.list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
+  return '<button class="'+cls+'" data-act="pick" data-d="'+c.d+'" data-s="'+c.s+'" aria-label="'+esc(fmtDate(c.d))+', '+SLOTS[c.s]+', '+c.n+' de '+st.cap+' plazas'+(c.mine?', reservada por ti':'')+'">'+
+    '<span class="cp">'+c.n+'/'+st.cap+'</span>'+(c.resp?'<span class="cr">'+esc(c.resp)+'</span>':'')+(who?'<span class="cn">'+who+'</span>':'')+
+    (c.mine?'<span class="ct"><strong>Tuya</strong></span>':(c.state==="full"?'<span class="ct">Completa</span>':''))+'</button>';
+}
+function selPanel(st,today,last,tk){
+  var c0=S.confirmBook;if(!c0)return "";
+  var wd=((new Date(c0.date.split("-")[0],c0.date.split("-")[1]-1,c0.date.split("-")[2]).getDay()+6)%7)+1;
+  var c=cellInfo(c0.date,c0.slot,wd,st,today,last,tk);
+  if(c.state==="na"||c.state==="past")return "";
+  var who=c.list.map(function(b){return '<li>'+esc(b.teacher)+' <span class="badge b-'+b.type+'" style="margin-left:.2rem">'+b.type+'</span></li>';}).join("");
+  var label=S.btype==="V"?"Reservar valoración":"Reservar entrenamiento";
+  var btn=c.mine?'<span class="ok">Ya tienes una reserva en esta franja.</span>':(c.state==="full"?'<span class="muted">Esta franja está completa. Elige otra.</span>':
+    '<button class="btn primary" data-act="doBook"'+(S.busy?" disabled":"")+'>'+label+'</button>');
+  return '<div class="card sel-panel" id="selPanel"><p class="eyebrow">Franja seleccionada</p><h3 style="text-transform:capitalize">'+esc(fmtDate(c.d))+' · '+SLOTS[c.s]+'</h3>'+
+    '<p><strong>'+c.n+'/'+st.cap+' plazas</strong>'+(c.resp?' · Profesor responsable: '+esc(c.resp):'')+'</p>'+
+    (who?'<ul class="small" style="margin:.2rem 0 .6rem;padding-left:1.1rem">'+who+'</ul>':'')+
+    '<div class="row">'+btn+'<button class="btn" data-act="noBook">Cerrar</button></div></div>';
 }
 function vReservar(){
   var st=S.settings||DEF_SET,today=todayStr(),last=addDays(today,st.horizon);
   var base=mondayOf(addDays(today,S.weekOff*7));
   var tk=S.name.trim().length>=2?tkeyOf(S.name):"";
-  var html='<h2 style="margin-top:0">Reserva tu hora</h2><p class="muted">Pon tu nombre, elige el tipo de sesión y una franja libre. Al reservar verás al momento qué equipo te atiende.</p>';
+  var html='<h2 style="margin-top:0">Reserva tu hora</h2><p class="muted">Pon tu nombre, elige el tipo de sesión y toca una franja libre del calendario. Al reservar verás al momento qué equipo te atiende.</p>';
   if(S.lastBook)html+=bookDone(S.lastBook);
   var names=Object.keys(S.teachers).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
   html+='<div class="card"><label for="bk-name" style="margin-top:0">Tu nombre</label>'+
@@ -555,19 +595,19 @@ function vReservar(){
     html+='</div>';
   }
 
-  html+='<div class="wk"><button class="btn sm" data-act="wkPrev"'+(S.weekOff>0?"":" disabled")+'>← Anterior</button><strong>Semana del '+esc(fmtDay(base))+'</strong>'+
-    '<button class="btn sm" data-act="wkNext"'+(addDays(base,7)<=last?"":" disabled")+'>Siguiente →</button></div>';
-  var shown=0;
-  for(var i=0;i<5;i++){
-    var d=addDays(base,i);if(d<today||d>last)continue;
-    var wd=i+1,open=st.open[wd]||[];shown++;
-    html+=dayHead(d);
-    if(st.closed.indexOf(d)>=0){html+='<div class="card muted small">Día cerrado.</div>';continue;}
-    var vis=open.filter(function(sl){return st.closed.indexOf(d+"#"+sl)<0;});
-    if(!vis.length){html+='<div class="card muted small">No hay franjas disponibles este día.</div>';continue;}
-    vis.forEach(function(sl){html+=slotRow(d,sl,wd,st,today,tk);});
+  html+='<div class="wk"><button class="btn sm" data-act="wkPrev" aria-label="Semana anterior"'+(S.weekOff>0?"":" disabled")+'>←</button><strong>'+esc(wkTitle(base))+'</strong>'+
+    '<button class="btn sm" data-act="wkNext" aria-label="Semana siguiente"'+(addDays(base,7)<=last?"":" disabled")+'>→</button></div>';
+  html+='<div class="legend"><span><i style="background:var(--c-free)"></i>Disponible</span><span><i style="background:var(--c-part)"></i>Quedan plazas</span><span><i style="background:var(--c-full)"></i>Completo</span><span><i style="background:var(--c-na)"></i>No disponible</span></div>';
+  var g='<div class="cal" role="group" aria-label="Calendario semanal"><div></div>';
+  var i,sl;
+  for(i=0;i<5;i++){var dd=addDays(base,i);g+='<div class="cal-h'+(dd===today?" today":"")+'">'+DAYABB[i]+'<b>'+Number(dd.slice(8))+'</b></div>';}
+  for(sl=1;sl<=6;sl++){
+    if(sl===4)g+='<div class="cal-t">10:40<br>11:10</div><div class="cal-break">Patio · no reservable</div>';
+    var tt=SLOTS[sl].split("–");
+    g+='<div class="cal-t"><b>'+tt[0]+'</b><span>'+tt[1]+'</span></div>';
+    for(i=0;i<5;i++)g+=calCell(cellInfo(addDays(base,i),sl,i+1,st,today,last,tk),st);
   }
-  if(!shown)html+='<div class="card muted">No quedan días reservables esta semana.</div>';
+  html+=g+'</div>'+selPanel(st,today,last,tk);
   return html;
 }
 function sdGet(){if(!S.sd)S.sd=JSON.parse(JSON.stringify(S.settings||DEF_SET));return S.sd;}
@@ -645,6 +685,7 @@ function render(){
     if(fid){var f=document.getElementById(fid);if(f){try{f.focus({preventScroll:true});if(ss!=null&&f.setSelectionRange)f.setSelectionRange(ss,se);}catch(e){}}}
   }
   if(S.scrollTop){S.scrollTop=false;window.scrollTo(0,0);}
+  if(S.scrollSel){S.scrollSel=false;var sp=document.getElementById("selPanel");if(sp)sp.scrollIntoView({block:"nearest",behavior:"smooth"});}
   if(S.scrollEditor){S.scrollEditor=false;var ed=document.getElementById("presTop");if(ed)ed.scrollIntoView({block:"center"});}
 }
 
@@ -732,16 +773,14 @@ var actions={
   btype:function(d){S.btype=d.t;S.confirmBook=null;render();},
   wkPrev:function(){S.weekOff=Math.max(0,S.weekOff-1);S.confirmBook=null;render();},
   wkNext:function(){S.weekOff++;S.confirmBook=null;render();},
-  askBook:function(d){
-    var n=val("bk-name").trim().replace(/\s+/g," ");
-    if(n.length<2){say("Escribe tu nombre antes de reservar.","err");render();return;}
-    S.name=n;lsSet("monasfit.name",n);S.confirmBook={date:d.d,slot:Number(d.s)};render();
-  },
+  pick:function(d){S.confirmBook={date:d.d,slot:Number(d.s)};S.scrollSel=true;render();},
   noBook:function(){S.confirmBook=null;render();},
   closeDone:function(){S.lastBook=null;render();},
   doBook:function(){
     var c=S.confirmBook;if(!c)return;
-    var nm=val("bk-name").trim().replace(/\s+/g," ");if(nm.length>=2&&nm!==S.name){S.name=nm;lsSet("monasfit.name",nm);}
+    var nm=val("bk-name").trim().replace(/\s+/g," ");
+    if(nm.length<2){say("Escribe tu nombre antes de reservar.","err");S.scrollTop=true;render();return;}
+    if(nm!==S.name){S.name=nm;lsSet("monasfit.name",nm);}
     run(async function(){
       try{
         var r=await api("book",{method:"POST",body:{name:S.name,type:S.btype,date:c.date,slot:c.slot}});
