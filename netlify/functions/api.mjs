@@ -728,25 +728,32 @@ export default async (req) => {
       for (const b of (await s.list({ prefix: "teamkeys/" })).blobs) teamKeysSet[b.key.slice(9)] = true;
       const em = await read("emails");
       const emailMode = Object.keys(em.data).length > 0;
-      let keys, emailList, ratings;
+      let keys, emailList;
       if (admin) {
         emailList = em.data;
         keys = {};
         const kl = await s.list({ prefix: "keys/" });
         for (const b of kl.blobs) keys[b.key.slice(5)] = true;
-        // Valoraciones que los profesores han puesto a los equipos (solo coordinación)
-        ratings = [];
+      }
+      // Valoraciones de los profesores a los equipos: detalle solo para coordinación; ranking (media y nº) para todos
+      const ratings = admin ? [] : undefined;
+      const agg = {};
+      {
         const rl = await s.list({ prefix: "ratings/" });
         const rr = await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" })));
         rr.forEach((r, i) => {
           const tk = rl.blobs[i].key.slice(8);
           for (const [k, v] of Object.entries(r || {})) {
             const [kind, team] = k.split(":");
-            ratings.push({ tkey: tk, teacher: (teachers.data[tk] && teachers.data[tk].name) || tk, kind, team: Number(team), stars: v.stars, comment: v.comment || "", at: v.at });
+            const a = (agg[team] = agg[team] || { sum: 0, n: 0 });
+            a.sum += Number(v.stars) || 0;
+            a.n++;
+            if (admin) ratings.push({ tkey: tk, teacher: (teachers.data[tk] && teachers.data[tk].name) || tk, kind, team: Number(team), stars: v.stars, comment: v.comment || "", at: v.at });
           }
         });
       }
-      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, teamKeysSet });
+      const ranking = Object.entries(agg).map(([t, a]) => ({ team: Number(t), avg: a.sum / a.n, n: a.n })).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
+      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet });
     }
 
     {
