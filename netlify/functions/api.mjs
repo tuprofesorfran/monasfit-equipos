@@ -241,6 +241,22 @@ const edits = (tkey, team, teachers, bookings) =>
   (teachers[tkey] && teachers[tkey].valTeam === team) ||
   bookings.some((b) => b.tkey === tkey && b.type === "V" && b.team === team);
 
+// Equipos que ya han atendido a un profesor: el que lo valora (V) y los que lo han entrenado (E, hasta hoy).
+function rateTeams(t, tkey, bookings) {
+  const out = [];
+  if (t && t.valTeam) out.push({ kind: "V", team: t.valTeam, dates: [] });
+  const today = madridNow().date;
+  const byTeam = new Map();
+  for (const b of bookings) {
+    if (b.tkey === tkey && b.type === "E" && b.team && b.date <= today) {
+      if (!byTeam.has(b.team)) byTeam.set(b.team, []);
+      byTeam.get(b.team).push(b.date);
+    }
+  }
+  for (const [team, dates] of [...byTeam].sort((a, c) => Math.min(...a[1].map((d) => +d.replace(/-/g, ""))) - Math.min(...c[1].map((d) => +d.replace(/-/g, ""))))) out.push({ kind: "E", team, dates: dates.sort() });
+  return out;
+}
+
 /* ---------- Reservar y cancelar (profesorado) ---------- */
 async function book(b) {
   const type = b && b.type;
@@ -362,12 +378,39 @@ const normKey = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const keyHash = (salt, k) => createHash("sha256").update(salt + ":" + normKey(k)).digest("hex");
 const TKEY_RE = /^[a-z0-9-]{1,80}$/;
 const MAX_DOC = 4 * 1024 * 1024;
+const DOC_CATS = ["valoracion", "parq", "prescripcion", "otro"];
 const DOC_TYPES = {
   pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
   txt: "text/plain; charset=utf-8", docx: "application/octet-stream", xlsx: "application/octet-stream",
 };
 
-// Devuelve "admin", "key" (clave del profesor) o "team" (equipo que lo valora). Si no, lanza error.
+// Equipo que entrena (o ha entrenado) a un profesor: solo consulta su ficha.
+const trains = (tkey, team, bookings) => bookings.some((b) => b.tkey === tkey && b.type === "E" && b.team === team);
+
+// Clave de equipo (alumnado). Si el equipo aún no tiene clave, el acceso sigue abierto como antes.
+async function teamAuth(req, team, count) {
+  if (!team) return false;
+  const s = store();
+  const rec = await s.get("teamkeys/" + team, { type: "json" });
+  if (!rec) return true;
+  const kp = req.headers.get("x-team-key");
+  if (!kp) return false;
+  const now = Date.now();
+  const at = await s.get("att/team-" + team, { type: "json" });
+  if (at && at.until > now) fail("Demasiados intentos. Espera 15 minutos.");
+  const a = Buffer.from(rec.h), b = Buffer.from(keyHash(rec.s, kp));
+  if (a.length === b.length && timingSafeEqual(a, b)) {
+    if (at) { try { await s.delete("att/team-" + team); } catch {} }
+    return true;
+  }
+  if (count) {
+    const n = ((at && at.n) || 0) + 1;
+    await s.setJSON("att/team-" + team, n >= 8 ? { n: 0, until: now + 15 * 60000 } : { n, until: 0 });
+  }
+  return false;
+}
+
+// Devuelve "admin", "key" (clave del profesor), "team" (equipo que lo valora) o "trainer" (equipo que lo entrena, solo lectura).
 async function fichaAccess(req, tkey, admin) {
   if (!TKEY_RE.test(tkey || "")) fail("Profesor no válido.");
   if (admin) return "admin";
@@ -391,7 +434,11 @@ async function fichaAccess(req, tkey, admin) {
   const team = int(req.headers.get("x-team"), 1, TEAMS);
   if (team) {
     const [t, b] = await Promise.all([read("teachers"), read("bookings")]);
-    if (edits(tkey, team, t.data, b.data)) return "team";
+    const rel = edits(tkey, team, t.data, b.data) ? "team" : trains(tkey, team, b.data) ? "trainer" : null;
+    if (rel) {
+      if (await teamAuth(req, team, true)) return rel;
+      fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
+    }
   }
   fail("No tienes acceso a esta ficha.");
 }
@@ -501,17 +548,61 @@ async function fichaRoutes(route, req, url, admin) {
     try { await store().delete("att/" + tkey); } catch {}
     return json({ ok: true, key });
   }
+  if (route === "team-key" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador puede generar claves de equipo.");
+    const b = await readJson(req);
+    const team = int(b && b.team, 1, TEAMS);
+    if (!team) fail("Equipo no válido.");
+    let key = "EQUIPO" + team + "-" + String(1000 + (randomBytes(2).readUInt16BE() % 9000));
+    if (b && b.key != null && b.key !== "") {
+      const nk = normKey(b.key);
+      if (nk.length < 6 || nk.length > 24) fail("La clave debe tener entre 6 y 24 letras o números.");
+      key = nk;
+    }
+    const salt = randomBytes(8).toString("hex");
+    await store().setJSON("teamkeys/" + team, { s: salt, h: keyHash(salt, key), at: Date.now() });
+    try { await store().delete("att/team-" + team); } catch {}
+    return json({ ok: true, team, key });
+  }
+  if (route === "team-check" && req.method === "POST") {
+    const b = await readJson(req);
+    const team = int(b && b.team, 1, TEAMS);
+    if (!team) fail("Equipo no válido.");
+    const fake = new Request("http://x", { headers: { "x-team-key": String((b && b.key) || "") } });
+    if (!(await teamAuth(fake, team, true))) fail("Clave incorrecta.");
+    return json({ ok: true });
+  }
   if (route === "ficha" && req.method === "GET") {
     const tkey = q("tkey");
     const role = await fichaAccess(req, tkey, admin);
-    const [ficha, presc, teachers] = await Promise.all([readFicha(tkey), store().get("prescriptions/" + tkey, { type: "json" }), read("teachers")]);
+    const [ficha, presc, teachers, bookings, ratings] = await Promise.all([readFicha(tkey), store().get("prescriptions/" + tkey, { type: "json" }), read("teachers"), read("bookings"), store().get("ratings/" + tkey, { type: "json" })]);
     const t = teachers.data[tkey];
-    return json({ role, name: (t && t.name) || tkey, ficha, prescription: presc || null });
+    const mine = role === "key" || role === "admin";
+    return json({ role, name: (t && t.name) || tkey, ficha, prescription: presc || null, ...(mine ? { rateTeams: rateTeams(t, tkey, bookings.data), ratings: ratings || {} } : {}) });
+  }
+  if (route === "rate" && req.method === "POST") {
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80);
+    const role = await fichaAccess(req, tkey, admin);
+    if (role === "team" || role === "trainer") fail("Solo el profesor puede valorar a los equipos.");
+    const kind = b && b.kind, team = int(b && b.team, 1, TEAMS);
+    const stars = int(b && b.stars, 1, 5);
+    if (!["V", "E"].includes(kind) || !team) fail("Equipo no válido.");
+    if (!stars) fail("Elige de 1 a 5 estrellas.");
+    const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
+    if (!rateTeams(teachers.data[tkey], tkey, bookings.data).some((x) => x.kind === kind && x.team === team)) fail("Ese equipo todavía no te ha atendido.");
+    return withLock(async () => {
+      const old = (await store().get("ratings/" + tkey, { type: "json" })) || {};
+      old[kind + ":" + team] = { stars, comment: str(b && b.comment, 500).trim(), at: Date.now() };
+      await store().setJSON("ratings/" + tkey, old);
+      return json({ ok: true, ratings: old });
+    });
   }
   if (route === "ficha" && req.method === "POST") {
     const b = await readJson(req);
     const tkey = str(b && b.tkey, 80);
     const role = await fichaAccess(req, tkey, admin);
+    if (role === "trainer") fail("Tu equipo solo puede consultar y descargar esta ficha.");
     const val = cleanValoraciones(b.valoraciones), ent = cleanEntrevista(b.entrevista);
     if (!val) fail("Datos no válidos.");
     return withLock(async () => {
@@ -524,18 +615,20 @@ async function fichaRoutes(route, req, url, admin) {
   if (route === "doc" && req.method === "POST") {
     const tkey = q("tkey");
     const role = await fichaAccess(req, tkey, admin);
+    if (role === "trainer") fail("Tu equipo solo puede consultar y descargar esta ficha.");
     const name = q("name").replace(/[\\/:*?"<>|\x00-\x1f]+/g, "_").trim() || "documento";
     const ext = (name.split(".").pop() || "").toLowerCase();
     if (!DOC_TYPES[ext]) fail("Formato no permitido. Sube PDF, imagen (png, jpg, webp), txt, docx o xlsx.");
+    const cat = DOC_CATS.includes(q("cat")) ? q("cat") : "";
     const buf = await req.arrayBuffer();
     if (!buf.byteLength) fail("El archivo está vacío.");
     if (buf.byteLength > MAX_DOC) fail("El archivo pesa más de 4 MB.");
     return withLock(async () => {
       const old = await readFicha(tkey);
-      if (old.docs.length >= 30) fail("Ya hay 30 documentos. Borra alguno antes de subir otro.");
+      if (old.docs.length >= 40) fail("Ya hay 40 documentos. Borra alguno antes de subir otro.");
       const id = randomBytes(6).toString("hex");
       await store().set("docs/" + tkey + "/" + id, buf);
-      const rec = { ...old, docs: [...old.docs, { id, name, ext, size: buf.byteLength, at: Date.now(), by: role }], updatedAt: Date.now() };
+      const rec = { ...old, docs: [...old.docs, { id, name, ext, size: buf.byteLength, at: Date.now(), by: role, ...(cat ? { cat } : {}) }], updatedAt: Date.now() };
       await store().setJSON("ficha/" + tkey, rec);
       return json({ role, ficha: rec });
     });
@@ -557,10 +650,25 @@ async function fichaRoutes(route, req, url, admin) {
       },
     });
   }
+  if (route === "doc-cat" && req.method === "POST") {
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80), id = str(b && b.id, 20);
+    const role = await fichaAccess(req, tkey, admin);
+    if (role === "trainer") fail("Tu equipo solo puede consultar y descargar esta ficha.");
+    if (!DOC_CATS.includes(b && b.cat)) fail("Tipo de documento no válido.");
+    return withLock(async () => {
+      const old = await readFicha(tkey);
+      if (!old.docs.some((x) => x.id === id)) fail("Ese documento ya no existe.");
+      const rec = { ...old, docs: old.docs.map((x) => (x.id === id ? { ...x, cat: b.cat } : x)), updatedAt: Date.now() };
+      await store().setJSON("ficha/" + tkey, rec);
+      return json({ role, ficha: rec });
+    });
+  }
   if (route === "doc-delete" && req.method === "POST") {
     const b = await readJson(req);
     const tkey = str(b && b.tkey, 80), id = str(b && b.id, 20);
-    await fichaAccess(req, tkey, admin);
+    const role = await fichaAccess(req, tkey, admin);
+    if (role === "trainer") fail("Tu equipo solo puede consultar y descargar esta ficha.");
     return withLock(async () => {
       const old = await readFicha(tkey);
       const rec = { ...old, docs: old.docs.filter((x) => x.id !== id), updatedAt: Date.now() };
@@ -611,20 +719,34 @@ export default async (req) => {
       const { blobs } = await s.list({ prefix: "prescriptions/" });
       const recs = await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })));
       const prescriptions = {};
+      const teamOk = admin || (team ? await teamAuth(req, team, false) : false);
       for (const p of recs) {
         if (!p || !p.tkey) continue;
-        if (admin || (team && sees(p.tkey, team, teachers.data, bookings.data))) prescriptions[p.tkey] = p;
+        if (admin || (team && teamOk && sees(p.tkey, team, teachers.data, bookings.data))) prescriptions[p.tkey] = p;
       }
+      const teamKeysSet = {};
+      for (const b of (await s.list({ prefix: "teamkeys/" })).blobs) teamKeysSet[b.key.slice(9)] = true;
       const em = await read("emails");
       const emailMode = Object.keys(em.data).length > 0;
-      let keys, emailList;
+      let keys, emailList, ratings;
       if (admin) {
         emailList = em.data;
         keys = {};
         const kl = await s.list({ prefix: "keys/" });
         for (const b of kl.blobs) keys[b.key.slice(5)] = true;
+        // Valoraciones que los profesores han puesto a los equipos (solo coordinación)
+        ratings = [];
+        const rl = await s.list({ prefix: "ratings/" });
+        const rr = await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" })));
+        rr.forEach((r, i) => {
+          const tk = rl.blobs[i].key.slice(8);
+          for (const [k, v] of Object.entries(r || {})) {
+            const [kind, team] = k.split(":");
+            ratings.push({ tkey: tk, teacher: (teachers.data[tk] && teachers.data[tk].name) || tk, kind, team: Number(team), stars: v.stars, comment: v.comment || "", at: v.at });
+          }
+        });
       }
-      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList });
+      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, teamKeysSet });
     }
 
     {
@@ -674,6 +796,7 @@ export default async (req) => {
         if (!edits(tkey, team, teachers.data, bookings.data)) {
           return json({ error: "Solo el equipo que valora a este profesor puede escribir su prescripción." }, 403);
         }
+        if (!(await teamAuth(req, team, true))) return json({ error: "La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela." }, 403);
       }
       const rec = {
         tkey,

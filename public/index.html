@@ -49,13 +49,21 @@ p{margin:.3rem 0}
 .top::before{content:"";display:block;height:5px;margin:-.7rem -16px .6rem;background:linear-gradient(90deg,#5aa9e6,#f6a65a 55%,#ffd666)}
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin-inline:-16px;padding:.7rem 16px 0}
 .brand{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
+.stars{display:flex;gap:.15rem;margin:.2rem 0 .5rem}.star{border:0;background:none;font-size:1.9rem;line-height:1;padding:.1rem .2rem;color:#c9d3df;cursor:pointer;min-width:40px;min-height:44px}.star.on{color:#f6a65a}.rate-t{font-weight:700;margin:1rem 0 0}.rate-t:first-of-type{margin-top:.3rem}.rrow{border-top:1px solid var(--line);padding:.5rem 0}.rrow:first-child{border-top:0}
+.docsel{margin-top:.35rem;font-size:.8rem;padding:.25rem .4rem;min-height:0;width:auto;max-width:100%}
 .brandL{display:flex;align-items:center;gap:.7rem;min-width:0}
 .logo{height:56px;width:56px;flex:none;object-fit:contain;border-radius:12px;background:#fff}
 .who{display:flex;flex-direction:column;gap:.15rem}
 .who label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
-.tabs{display:flex;gap:.25rem;margin-top:.6rem;overflow-x:auto}
-.tab{padding:.55rem .85rem;text-decoration:none;color:var(--muted);font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
-.tab[aria-current="page"]{color:var(--fg);border-bottom-color:var(--sun)}
+.tabs{display:flex;gap:.35rem;margin-top:.6rem;padding-bottom:.6rem}
+.tab{--c:90,169,230;flex:1 1 0;min-width:0;text-align:center;padding:.45rem .3rem;text-decoration:none;color:var(--fg);font-weight:600;font-size:.92rem;border-radius:10px;background:rgba(var(--c),.16);border:1.5px solid rgba(var(--c),.30);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tab[href="#reservar"]{--c:90,169,230}
+.tab[href="#agenda"]{--c:246,166,90}
+.tab[href="#profesorado"]{--c:255,214,102}
+.tab[href="#mi-equipo"]{--c:240,114,106}
+.tab[href="#gestion"]{--c:47,111,208}
+.tab[aria-current="page"]{background:rgba(var(--c),.42);border-color:rgb(var(--c));box-shadow:0 1px 0 rgba(var(--c),.6)}
+@media(max-width:420px){.tab{font-size:.82rem;padding:.45rem .15rem}}
 main{padding-top:1rem}
 
 input,select,textarea,button{font:inherit;color:inherit}
@@ -174,7 +182,7 @@ var TEAMS=12;
 var SLOTS=[null,"7:55–8:50","8:50–9:45","9:45–10:40","11:10–12:05","12:05–13:00","13:00–13:55"];
 var SLOT_START={"7:55":1,"8:50":2,"9:45":3,"11:10":4,"12:05":5,"13:00":6};
 var GOALS=["Salud general","Reducir grasa corporal","Ganar masa muscular","Mejorar la condición física","Prevenir lesiones o dolor de espalda","Mejorar la movilidad"];
-var TABS=[["mi-equipo","Mi equipo"],["reservar","Reservar"],["agenda","Agenda"],["profesorado","Profesorado"],["gestion","Gestión"]];
+var TABS=[["reservar","Reservar"],["agenda","Agenda"],["profesorado","Profesorado"],["mi-equipo","Equipo"],["gestion","Gestión"]];
 
 var DEF_SET={cap:4,open:{1:[1,2],2:[1,5,6],3:[1,2,3,4],4:[3,4,5],5:[4,5]},resp:{"1-1":"Fernando","1-2":"Fernando","2-1":"Fernando","2-5":"Fran","2-6":"Fran","3-1":"Fernando","3-2":"Fernando","3-3":"Fran","3-4":"Fran","4-3":"Fran","4-4":"Fran","4-5":"Fran","5-4":"Fernando","5-5":"Fernando"},closed:[],horizon:21};
 var SLOT_MIN=[null,475,530,585,670,725,780];
@@ -184,7 +192,7 @@ var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
   bulkErr:[],noRestore:false,scrollEditor:false,
-  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false,fall:null,impErr:[],emailMode:false,emails:{},email:"",myTk:"",needName:false};
+  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false,fall:null,impErr:[],emailMode:false,emails:{},email:"",myTk:"",needName:false,ratings:[],rdraft:{},teamKeysSet:{},teamKeys:{},askTeam:null,tkErr:"",tnew:null};
 
 var $app=document.getElementById("app");
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -236,6 +244,7 @@ async function api(path,opts){
   var h={"content-type":opts.raw?"application/octet-stream":"application/json"};
   if(S.code)h["x-code"]=S.code;
   if(S.adminPass)h["x-admin"]=S.adminPass;
+  if(S.team&&S.teamKeys[S.team])h["x-team-key"]=S.teamKeys[S.team];
   if(opts.headers)Object.keys(opts.headers).forEach(function(k){h[k]=opts.headers[k];});
   var r=await fetch("/api/"+path,{method:opts.method||"GET",headers:h,body:opts.raw?opts.raw:(opts.body?JSON.stringify(opts.body):undefined)});
   var data=null;try{data=await r.json();}catch(e){}
@@ -246,7 +255,8 @@ async function refresh(){
   try{
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.teamKeysSet=d.teamKeysSet||{};
+    if(!S.admin&&S.team&&S.teamKeysSet[S.team]&&!S.teamKeys[S.team]){S.askTeam=S.team;S.team=null;}
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
     Object.keys(S.tokens).forEach(function(id){if(!ids[id]){delete S.tokens[id];ch=true;}});if(ch)saveTokens();
@@ -396,8 +406,9 @@ function sessionCard(b){
     extra='<div class="pr-row"><button class="btn sm" data-act="toggle" data-id="'+esc(b.id)+'">'+(open?"Ocultar":"Ver")+' prescripción</button></div>'+(open?presView(p):"");
   }else{
     var vt=vTeamOf(b.tkey);
-    extra='<p class="muted small" style="margin-top:.5rem">'+(vt?"Todavía no hay prescripción. La valoración la hace el equipo "+vt+".":"Este profesor aún no tiene valoración registrada.")+'</p>';
+    extra='<p class="muted small" style="margin-top:.5rem">'+(vt?"La valoración y la prescripción las hace el equipo "+vt+". Sus documentos están en la ficha.":"Este profesor aún no tiene valoración registrada.")+'</p>';
   }
+  if(canSee(b.tkey)&&!S.admin)extra+='<div class="pr-row"><button class="btn sm primary" data-act="goFicha" data-k="'+esc(b.tkey)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha y documentos</button></div>';
   return '<article class="sess"><div><span class="time">'+SLOTS[b.slot]+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
     '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
     (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div></article>';
@@ -410,6 +421,12 @@ function groupByDate(list){
 function dayHead(d){var t=dayTag(d);return '<h3 class="day">'+(t?'<span class="dl">'+t+'</span>':'')+'<span>'+esc(fmtDate(d))+'</span></h3>';}
 
 function vMine(){
+  if(S.askTeam){
+    return '<h2>Clave del equipo '+S.askTeam+'</h2><p class="muted">Escribe la clave de tu equipo (te la da el profesor coordinador). Se queda guardada en este móvil.</p><div class="editor"><label for="tk-in">Clave del equipo</label>'+
+      '<input id="tk-in" data-keep autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Por ejemplo: EQUIPO3-4821">'+
+      (S.tkErr?'<div class="note err small">'+esc(S.tkErr)+'</div>':'')+
+      '<div class="row" style="margin-top:.6rem"><button class="btn primary" data-act="teamLogin"'+(S.busy?" disabled":"")+'>Entrar</button><button class="btn" data-act="teamLoginNo">Cancelar</button></div></div>';
+  }
   if(!S.team){
     var btns="";for(var i=1;i<=TEAMS;i++)btns+='<button data-act="pickTeam" data-n="'+i+'">'+i+'</button>';
     return '<h2>¿Qué equipo eres?</h2><p class="muted">Elige tu número de equipo. Se queda guardado en este móvil y puedes cambiarlo arriba.</p><div class="pick">'+btns+'</div><p style="margin-top:1.4rem"><a class="btn primary" style="text-decoration:none" href="#reservar">Soy profesor o profesora: reservar hora</a></p>';
@@ -439,6 +456,7 @@ function vMine(){
     html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' sesiones anteriores ('+past.length+')</button></div>';
     if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
   }
+  if(S.teamKeysSet[S.team])html+='<p style="margin-top:1.4rem"><button class="btn sm" data-act="teamRekey">Cambiar la clave de mi equipo</button></p>';
   return html;
 }
 function vAgenda(){
@@ -474,13 +492,14 @@ function fAskForm(k){
 function vTeachers(){
   if(S.fk&&S.fdata)return vFicha();
   var ks=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;}).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
-  var html='<h2 style="margin-top:0">Profesorado</h2><p class="muted small">Cada profesor entra en su ficha con su clave personal: valoración corporal, prescripción, entrevista y documentos.</p>';
+  if(S.team&&!S.admin)ks.sort(function(a,b){return (canSee(a)?0:1)-(canSee(b)?0:1)||S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+  var html='<h2 style="margin-top:0">Profesorado</h2><p class="muted small">Cada profesor entra en su ficha con su clave personal. Los equipos entran con la clave de su equipo a las fichas de los profesores que valoran o entrenan.</p>';
   if(!ks.length)return html+'<div class="card muted">Aún no hay profesorado registrado. Aparecerá aquí al reservar su primera sesión.</div>';
   ks.forEach(function(k){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
     html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">Valora el equipo '+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+
-      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+'</p>';
+      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&canSee(k)?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
       var btns='<button class="btn sm primary" data-act="openFicha" data-k="'+esc(k)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha</button>';
@@ -494,12 +513,68 @@ function vTeachers(){
   });
   return html;
 }
+var DOC_CATS=[["valoracion","VALORACIÓN CORPORAL"],["parq","PAR-Q"],["prescripcion","PRESCRIPCIÓN"],["otro","OTRO DOCUMENTO"]];
+function docLabel(c){for(var i=0;i<DOC_CATS.length;i++)if(DOC_CATS[i][0]===c)return DOC_CATS[i][1];return "OTRO DOCUMENTO";}
+function guessCat(n){
+  var s=String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+  if(/par-?q|cuestionario/.test(s))return "parq";
+  if(/tan[iy]ta|valoraci|composici|inicial|antropom/.test(s))return "valoracion";
+  if(/rutina|entren|prescrip|hipertrofia|full ?body|marta-y-guillermo|monasfit/.test(s))return "prescripcion";
+  return "otro";
+}
+function docCat(x){return x.cat&&docLabel(x.cat)!=="OTRO DOCUMENTO"||x.cat==="otro"?x.cat:guessCat(x.name);}
+function catOpts(sel,blank){var o=blank?'<option value="">Elige el tipo…</option>':"";DOC_CATS.forEach(function(c){o+='<option value="'+c[0]+'"'+(sel===c[0]?" selected":"")+'>'+c[1]+'</option>';});return o;}
+function starsTxt(n){var s="";for(var i=1;i<=5;i++)s+=i<=n?"★":"☆";return s;}
+function shortD(s){var p=s.split("-");return Number(p[2])+"/"+Number(p[1]);}
+function vRate(d){
+  var teams=d.rateTeams||[];
+  var html='<div class="card"><h3>Valora a tus equipos</h3><p class="muted small" style="margin-top:0">Cuéntanos qué tal te ha ido con el equipo que te valoró y con los que te han entrenado. Solo lo ve la coordinación.</p>';
+  if(!teams.length)html+='<p class="muted small">Cuando un equipo te atienda podrás valorarlo aquí.</p>';
+  teams.forEach(function(x){
+    var k=x.kind+":"+x.team,saved=(d.ratings||{})[k]||null,dr=S.rdraft[k],n=dr!=null?dr:(saved?saved.stars:0);
+    var lbl=x.kind==="V"?"Equipo "+x.team+" · te hizo la valoración":"Equipo "+x.team+" · te entrenó"+(x.dates&&x.dates.length?" ("+x.dates.map(shortD).join(", ")+")":"");
+    var st="";for(var i=1;i<=5;i++)st+='<button class="star'+(i<=n?" on":"")+'" data-act="rStar" data-k="'+k+'" data-n="'+i+'" aria-label="'+i+' de 5 estrellas">'+(i<=n?"★":"☆")+'</button>';
+    html+='<p class="rate-t">'+esc(lbl)+'</p><div class="stars" role="group" aria-label="Puntuación">'+st+'</div>'+
+      '<label for="rc-'+x.kind+'-'+x.team+'">Comentario (opcional)</label><textarea id="rc-'+x.kind+'-'+x.team+'" data-keep rows="2" placeholder="Qué te ha gustado y qué mejorarías">'+esc(saved?saved.comment:"")+'</textarea>'+
+      '<div class="row" style="margin-top:.5rem"><button class="btn primary sm" data-act="rSave" data-k="'+k+'"'+(S.busy?" disabled":"")+'>'+(saved?"Actualizar valoración":"Enviar valoración")+'</button>'+(saved?'<span class="muted small">Enviada el '+esc(fmtShort(saved.at))+'</span>':"")+'</div>';
+  });
+  return html+'</div>';
+}
+function vTeamKeys(){
+  var html='<div class="card"><h3>Claves de los equipos</h3><p class="muted small" style="margin-top:0">Cada pareja entra con la clave de su equipo para ver las fichas de los profesores que valora o entrena. Mientras un equipo no tenga clave, entra cualquiera como ese equipo.</p>';
+  if(S.tnew&&S.tnew.length)html+='<div class="note ok"><strong>Claves nuevas</strong><br><span class="small">Anótalas ahora: no se pueden volver a ver (si se pierde una, genera otra).</span><textarea id="tnew-txt" readonly rows="'+Math.min(14,S.tnew.length+1)+'" style="width:100%;font-family:monospace;margin-top:.4rem">'+esc(S.tnew.slice().sort(function(a,b){return a.team-b.team;}).map(function(x){return "Equipo "+x.team+": "+x.key;}).join("\n"))+'</textarea><div class="row" style="margin-top:.5rem"><button class="btn sm" data-act="tkCopy">Copiar lista</button><button class="btn sm" data-act="tkOk">Ya las he anotado</button></div></div>';
+  var miss=0;
+  for(var n=1;n<=TEAMS;n++){
+    var has=!!S.teamKeysSet[n];if(!has)miss++;
+    html+='<div class="list-row"><div class="what"><strong>Equipo '+n+'</strong>'+(membersOf(n)?' <span class="small muted">'+esc(membersOf(n))+'</span>':'')+'</div><div class="row"><span class="tag">'+(has?"Con clave":"Sin clave")+'</span><button class="btn sm" data-act="tkGen" data-n="'+n+'"'+(S.busy?" disabled":"")+'>'+(has?"Nueva clave":"Generar clave")+'</button></div></div>';
+  }
+  if(miss)html+='<div class="row" style="margin-top:.8rem"><button class="btn primary sm" data-act="tkGenAll"'+(S.busy?" disabled":"")+'>Generar la clave de los '+miss+' equipo'+(miss===1?"":"s")+' sin clave</button></div>';
+  return html+'</div>';
+}
+function vRatings(){
+  var R=S.ratings||[];
+  var html='<div class="card"><h3>Valoraciones de los equipos</h3><p class="muted small" style="margin-top:0">Lo que opina el profesorado del equipo que lo valoró y de los que lo entrenaron. Solo lo ves tú.</p>';
+  if(!R.length)return html+'<p class="muted small">Todavía no hay valoraciones.</p></div>';
+  for(var t=1;t<=TEAMS;t++){
+    var L=R.filter(function(r){return r.team===t;});if(!L.length)continue;
+    var avg=L.reduce(function(a,r){return a+r.stars;},0)/L.length;
+    html+='<div class="rrow"><strong>Equipo '+t+'</strong> · <span style="color:#f6a65a">'+starsTxt(Math.round(avg))+'</span> '+String(Math.round(avg*10)/10).replace(".",",")+' ('+L.length+(L.length===1?" valoración":" valoraciones")+')';
+    L.forEach(function(r){html+='<div class="small muted">'+esc(r.teacher)+' ('+(r.kind==="V"?"valoración":"entrenamiento")+'): '+starsTxt(r.stars)+(r.comment?' «'+esc(r.comment)+'»':"")+'</div>';});
+    html+='</div>';
+  }
+  return html+'</div>';
+}
 function vFicha(){
   var k=S.fk,d=S.fdata,f=d.ficha,p=d.prescription;
-  var who=d.role==="key"?"Has entrado con tu clave personal.":(d.role==="admin"?"Acceso de coordinación.":"Acceso como equipo que valora a este profesor.");
+  var who=d.role==="key"?"Has entrado con tu clave personal.":(d.role==="admin"?"Acceso de coordinación.":(d.role==="trainer"?"Tu equipo entrena a este profesor: puedes consultar y descargar sus documentos.":"Acceso como equipo que valora a este profesor."));
+  var ro=d.role==="trainer";
   var html='<p><button class="btn sm" data-act="fClose">← Volver al profesorado</button></p>'+
     '<p class="eyebrow">Ficha personal</p><h2 style="margin-top:0">'+esc(d.name)+'</h2><p class="muted small">'+who+' Estos datos son privados: no los compartas.</p>';
 
+  // La valoración, la prescripción y la entrevista se hacen en la app de rutinas MonasFIT:
+  // aquí la ficha solo guarda los documentos que genera. Ponlo en false para volver a mostrar esas secciones.
+  var SOLO_DOCS=true;
+  if(!SOLO_DOCS){
   // Valoración corporal
   var vals=(f.valoraciones||[]).slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
   html+='<div class="card"><h3>Valoración corporal</h3>';
@@ -535,16 +610,21 @@ function vFicha(){
   html+='<div class="card"><h3>Entrevista</h3>'+ENT_FIELDS.map(function(x){
     return '<label for="fe-'+x[0]+'">'+x[1]+'</label><textarea id="fe-'+x[0]+'" data-keep rows="2" placeholder="'+esc(x[2])+'">'+esc(e[x[0]]||"")+'</textarea>';
   }).join("")+'<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="fSaveEnt"'+(S.busy?" disabled":"")+'>Guardar entrevista</button></div></div>';
+  }
+
+  if(d.role==="key")html+=vRate(d);
 
   // Documentos
-  html+='<div class="card"><h3>Documentos</h3>';
+  html+='<div class="card"><h3>Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT.</p>';
   if(!(f.docs||[]).length)html+='<p class="muted small">No hay documentos.</p>';
   (f.docs||[]).forEach(function(x){
-    html+='<div class="list-row"><div class="what"><strong>'+esc(x.name)+'</strong><div class="small muted">'+fmtSize(x.size)+' · '+esc(fmtShort(x.at))+'</div></div><div class="row">'+
+    var dc=docCat(x);
+    html+='<div class="list-row"><div class="what"><strong>'+docLabel(dc)+'</strong><div class="small muted">'+esc(fmtShort(x.at))+' · '+fmtSize(x.size)+'</div>'+
+      (ro?"":'<select class="docsel" data-change="docCat" data-id="'+esc(x.id)+'" aria-label="Cambiar el tipo de documento">'+catOpts("",false).replace('<option value="valoracion">','<option value="" selected>Cambiar tipo…</option><option value="valoracion">')+'</select>')+'</div><div class="row">'+
       '<button class="btn sm" data-act="fDown" data-id="'+esc(x.id)+'">Descargar</button>'+
-      (S.confirmDoc===x.id?'<button class="btn sm danger" data-act="fDelDocYes" data-id="'+esc(x.id)+'">Borrar</button><button class="btn sm" data-act="fDelDocNo">No</button>':'<button class="btn sm" data-act="fDelDoc" data-id="'+esc(x.id)+'">Borrar</button>')+'</div></div>';
+      (ro?"":(S.confirmDoc===x.id?'<button class="btn sm danger" data-act="fDelDocYes" data-id="'+esc(x.id)+'">Borrar</button><button class="btn sm" data-act="fDelDocNo">No</button>':'<button class="btn sm" data-act="fDelDoc" data-id="'+esc(x.id)+'">Borrar</button>'))+'</div></div>';
   });
-  html+='<label for="fdoc" style="margin-top:.8rem">Subir un documento</label><input id="fdoc" type="file" data-change="fdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx">'+
+  if(!ro)html+='<label for="fdoc-cat" style="margin-top:.8rem">Subir un documento</label><select id="fdoc-cat" data-keep>'+catOpts("",true)+'</select><input id="fdoc" style="margin-top:.5rem" type="file" data-change="fdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx">'+
     '<p class="muted small">PDF, imagen, txt, Word o Excel. Máximo 4 MB cada uno.</p></div>';
   if(d.role==="key")html+='<div class="row" style="margin:1rem 0"><button class="btn" data-act="fLogout">Cerrar mi ficha en este dispositivo</button></div>';
   return html;
@@ -560,11 +640,11 @@ function vAdminTeachers(){
   var emOf={};Object.keys(S.emails||{}).forEach(function(e){emOf[S.emails[e]]=e;});
   html+='<div class="note'+(S.emailMode?' ok':'')+' small">'+(S.emailMode?'<strong>Reserva con correo activada.</strong> Solo pueden reservar los correos registrados ('+Object.keys(S.emails||{}).length+'). Para dar de alta a alguien nuevo, añade su correo aquí.':'Todavía no hay ningún correo registrado: el profesorado reserva escribiendo su nombre. En cuanto registres el primer correo, pasarán a reservar con el correo corporativo.')+'</div>';
   html+='<div class="grid2"><div><label for="nt-name">Añadir profesor</label><input id="nt-name" data-keep autocomplete="off" placeholder="Nombre y apellido"></div>'+
-    '<div><label for="nt-email">Correo corporativo</label><input id="nt-email" data-keep type="email" autocomplete="off" autocapitalize="off" placeholder="nombre@centro.es"></div>'+
+    '<div><label for="nt-email">Correo corporativo</label><input id="nt-email" data-keep type="email" autocomplete="off" autocapitalize="off" placeholder="nombre@edu.gva.es"></div>'+
     '<div><label for="nt-course">Curso</label><input id="nt-course" data-keep autocomplete="off" value="'+cur+'"></div></div>'+
     '<div class="row" style="margin:.6rem 0"><button class="btn primary" data-act="addTeacher"'+(S.busy?" disabled":"")+'>Añadir al profesorado</button>'+
     (old?'<button class="btn" data-act="archiveOld"'+(S.busy?" disabled":"")+'>Archivar los de cursos anteriores ('+old+')</button>':'')+'</div>'+
-    '<label for="nt-bulk">Pegar varios profesores</label><textarea id="nt-bulk" data-keep rows="4" placeholder="Víctor Sepulcre, victor@centro.es, 1&#10;Paula Serra, paula@centro.es, 1"></textarea>'+
+    '<label for="nt-bulk">Pegar varios profesores</label><textarea id="nt-bulk" data-keep rows="4" placeholder="Víctor Sepulcre, vm.sepulcremonzo@edu.gva.es, 1&#10;Paula Serra, p.serragomez@edu.gva.es, 1"></textarea>'+
     '<p class="muted small">Una persona por línea: nombre, correo corporativo y equipo que la valora (1 a 12), separados por comas. El correo y el equipo son opcionales.</p>'+
     (S.impErr.length?'<div class="note err small">'+S.impErr.map(esc).join("<br>")+'</div>':'')+
     '<div class="row" style="margin:.4rem 0 .8rem"><button class="btn primary" data-act="importTeachers"'+(S.busy?" disabled":"")+'>Importar profesorado</button>'+
@@ -622,6 +702,8 @@ function vAdmin(){
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="saveTeams"'+(S.busy?" disabled":"")+'>Guardar equipos</button></div></div>';
 
   html+=vAdminTeachers();
+  html+=vTeamKeys();
+  html+=vRatings();
   var ks=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
   if(ks.length){
     html+='<div class="card"><h3>Equipo de valoración de cada profesor</h3><p class="muted small">Se fija con la primera valoración. Cámbialo aquí si hace falta.</p>';
@@ -703,7 +785,7 @@ function vReservar(){
   var names=Object.keys(S.teachers).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
   html+='<div class="card">'+(S.emailMode?
     '<label for="bk-email" style="margin-top:0">Tu correo corporativo</label>'+
-    '<input id="bk-email" data-keep data-change="bkemail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="'+esc(S.email)+'" placeholder="nombre.apellido@centro.es">'+(S.needName?'<label for="bk-fullname">Tu nombre y apellidos</label><input id="bk-fullname" data-keep autocomplete="name" placeholder="Por ejemplo: Laura Justamante"><p class="muted small" style="margin:.3rem 0 0">Es tu primera vez en el proyecto: con tu nombre te das de alta. Después solo necesitarás el correo.</p>':''):
+    '<input id="bk-email" data-keep data-change="bkemail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="'+esc(S.email)+'" placeholder="nombre@edu.gva.es">'+(S.needName?'<label for="bk-fullname">Tu nombre y apellidos</label><input id="bk-fullname" data-keep autocomplete="name" placeholder="Por ejemplo: Laura Justamante"><p class="muted small" style="margin:.3rem 0 0">Es tu primera vez en el proyecto: con tu nombre te das de alta. Después solo necesitarás el correo.</p>':''):
     '<label for="bk-name" style="margin-top:0">Tu nombre</label>'+
     '<input id="bk-name" data-keep data-change="bkname" list="tl2" autocomplete="off" value="'+esc(S.name)+'" placeholder="Por ejemplo: Laura J.">'+
     '<datalist id="tl2">'+names.map(function(n){return '<option value="'+esc(n)+'">';}).join("")+'</datalist>')+
@@ -843,13 +925,36 @@ async function run(fn,okMsg){
 }
 function val(id){var el=document.getElementById(id);return el?el.value:"";}
 function setTeam(n){S.team=n||null;lsSet("monasfit.team",n?String(n):"");}
+function saveTeamKeys(){lsSet("monasfit.teamkeys",JSON.stringify(S.teamKeys));}
+function chooseTeam(n){
+  if(n&&!S.admin&&S.teamKeysSet[n]){S.askTeam=n;S.tkErr="";S.tab="mi-equipo";if(location.hash!=="#mi-equipo")location.hash="#mi-equipo";render();setTimeout(function(){var i=document.getElementById("tk-in");if(i)i.focus();},0);return;}
+  S.askTeam=null;setTeam(n);render();refresh().then(render);
+}
 function summary(r){
   var s=r.added+" reserva"+(r.added===1?"":"s")+" añadida"+(r.added===1?"":"s")+" y "+r.assigned+" asignada"+(r.assigned===1?"":"s")+".";
   if(r.dup)s+=" "+r.dup+" repetida"+(r.dup===1?"":"s")+" omitida"+(r.dup===1?"":"s")+".";
   return s;
 }
 var actions={
-  pickTeam:function(d){setTeam(Number(d.n));render();refresh().then(render);},
+  pickTeam:function(d){chooseTeam(Number(d.n));},
+  teamLogin:function(){
+    var n=S.askTeam,key=val("tk-in").trim();if(!n)return;
+    if(!key){S.tkErr="Escribe la clave de tu equipo.";render();return;}
+    S.busy=true;S.tkErr="";render();
+    api("team-check",{method:"POST",body:{team:n,key:key}}).then(function(){S.teamKeys[n]=key;saveTeamKeys();S.askTeam=null;setTeam(n);return refresh();}).catch(function(e){S.tkErr=e.message||"No se pudo comprobar la clave.";}).then(function(){S.busy=false;render();});
+  },
+  teamLoginNo:function(){S.askTeam=null;S.tkErr="";render();},
+  teamRekey:function(){S.askTeam=S.team;S.tkErr="";render();},
+  goFicha:function(d){S.tab="profesorado";if(location.hash!=="#profesorado")location.hash="#profesorado";actions.openFicha(d);},
+  tkGen:function(d){run(async function(){var r=await api("team-key",{method:"POST",body:{team:Number(d.n)}});S.teamKeysSet[r.team]=true;S.tnew=(S.tnew||[]).filter(function(x){return x.team!==r.team;}).concat([{team:r.team,key:r.key}]);},"");},
+  tkGenAll:function(){run(async function(){var list=[];for(var i=1;i<=TEAMS;i++){if(S.teamKeysSet[i])continue;var r=await api("team-key",{method:"POST",body:{team:i}});S.teamKeysSet[i]=true;list.push({team:i,key:r.key});}S.tnew=(S.tnew||[]).concat(list);return list.length;},function(n){return n+" clave"+(n===1?"":"s")+" generada"+(n===1?"":"s")+".";});},
+  tkOk:function(){S.tnew=null;render();},
+  tkCopy:function(){
+    var ta=document.getElementById("tnew-txt");if(!ta)return;
+    var done=function(){say("Lista copiada.","ok");render();};
+    var fb=function(){ta.focus();ta.select();try{document.execCommand("copy");}catch(e){}say("Si no se ha copiado, selecciona el texto y cópialo a mano.","ok");render();};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta.value).then(done,fb);}else fb();
+  },
   filter:function(d){S.filter=d.f;render();},
   togglePast:function(){S.showPast=!S.showPast;render();},
   toggle:function(d){S.open[d.id]=!S.open[d.id];render();},
@@ -968,7 +1073,7 @@ var actions={
   },
   openFicha:function(d){
     var k=d.k;
-    if(S.admin||(S.team&&canEditPres(k))||S.fpass[k]){run(function(){return loadFicha(k);},"").then(function(){if(S.fpass[k]&&!S.fk){delete S.fpass[k];fSavePass();S.fAsk=k;render();}});}
+    if(S.admin||(S.team&&canSee(k))||S.fpass[k]){run(function(){return loadFicha(k);},"").then(function(){if(S.fpass[k]&&!S.fk){delete S.fpass[k];fSavePass();S.fAsk=k;render();}});}
     else{S.fAsk=k;S.fErr="";render();setTimeout(function(){var i=document.getElementById("fk-in");if(i)i.focus();},0);}
   },
   fAskNo:function(){S.fAsk=null;S.fErr="";render();},
@@ -986,6 +1091,14 @@ var actions={
     if(!v.peso&&!v.talla&&!v.grasa&&!v.musculo&&!v.cintura){say("Escribe al menos un dato de la medición.","err");render();return;}
     var list=(S.fdata.ficha.valoraciones||[]).concat([v]);
     run(async function(){var r=await api("ficha",{method:"POST",headers:fHeaders(k),body:{tkey:k,valoraciones:list,entrevista:S.fdata.ficha.entrevista}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Medición guardada.");
+  },
+  rStar:function(d){S.rdraft[d.k]=Number(d.n);render();},
+  rSave:function(d){
+    var k=d.k,pr=k.split(":"),kind=pr[0],team=Number(pr[1]),saved=((S.fdata.ratings||{})[k]||null);
+    var n=S.rdraft[k]!=null?S.rdraft[k]:(saved?saved.stars:0);
+    if(!n){say("Elige de 1 a 5 estrellas.","err");render();return;}
+    var kk=S.fk;
+    run(async function(){var r=await api("rate",{method:"POST",headers:fHeaders(kk),body:{tkey:kk,kind:kind,team:team,stars:n,comment:val("rc-"+kind+"-"+team)}});S.fdata.ratings=r.ratings;delete S.rdraft[k];S.noRestore=true;},"Valoración enviada. ¡Gracias!");
   },
   fDelVal:function(d){S.confirmVal=d.id;render();},
   fDelValNo:function(){S.confirmVal=null;render();},
@@ -1100,17 +1213,20 @@ var changes={
     var sd=sdGet(),d=el.dataset.d,sl=Number(el.dataset.s),a=(sd.open[d]||[]).filter(function(x){return x!==sl;});
     if(el.checked)a.push(sl);a.sort(function(x,y){return x-y;});sd.open[d]=a;render();
   },
-  team:function(el){setTeam(el.value?Number(el.value):null);if(S.fdata&&S.fdata.role==="team"){S.fk=null;S.fdata=null;}render();refresh().then(render);},
+  team:function(el){if(S.fdata&&S.fdata.role!=="key"&&S.fdata.role!=="admin"){S.fk=null;S.fdata=null;}chooseTeam(el.value?Number(el.value):null);},
   tCourse:function(el){var k=el.dataset.k,v=el.value.trim().slice(0,12);run(async function(){if(S.teachers[k])S.teachers[k].course=v;await saveColl("teachers");},"Curso actualizado.");},
   fdoc:function(el){
     var f=el.files&&el.files[0],k=S.fk;if(!f||!k)return;
+    var cat=val("fdoc-cat");
+    if(!cat){el.value="";say("Elige primero el tipo de documento (valoración corporal, PAR-Q o prescripción).","err");render();return;}
     if(f.size>4*1024*1024){el.value="";say("El archivo pesa más de 4 MB.","err");render();return;}
     run(async function(){
       var buf=await f.arrayBuffer();
-      var r=await api("doc?tkey="+encodeURIComponent(k)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
+      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
       S.fdata.ficha=r.ficha;S.noRestore=true;
     },"Documento subido.");
   },
+  docCat:function(el){var k=S.fk,id=el.dataset.id,c=el.value;if(!c){render();return;}run(async function(){var r=await api("doc-cat",{method:"POST",headers:fHeaders(k),body:{tkey:k,id:id,cat:c}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Tipo de documento cambiado.");},
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
   bteam:function(el){var id=el.dataset.id,t=el.value?Number(el.value):null;run(async function(){var b=S.bookings.filter(function(x){return x.id===id;})[0];if(b)b.team=t;await saveColl("bookings");},"Equipo actualizado.");},
   valTeam:function(el){var k=el.dataset.k,t=el.value?Number(el.value):null;run(async function(){if(S.teachers[k])S.teachers[k].valTeam=t;await saveColl("teachers");},"Equipo de valoración actualizado.");}
@@ -1138,6 +1254,7 @@ window.addEventListener("hashchange",function(){readHash();render();window.scrol
 async function init(){
   S.code=lsGet("monasfit.code");S.name=lsGet("monasfit.name");S.email=lsGet("monasfit.email");S.myTk=lsGet("monasfit.tkey");S.tokens=loadTokens();
   var t=lsGet("monasfit.team");if(t)S.team=Number(t)||null;
+  try{S.teamKeys=JSON.parse(lsGet("monasfit.teamkeys")||"{}")||{};}catch(e){S.teamKeys={};}
   S.adminPass=ssGet("monasfit.admin");
   try{S.fpass=JSON.parse(ssGet("monasfit.fk")||"{}")||{};}catch(e){S.fpass={};}
   readHash();render();
