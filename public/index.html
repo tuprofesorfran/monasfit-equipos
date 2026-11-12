@@ -60,6 +60,9 @@ p{margin:.3rem 0}
 .brandL{display:flex;align-items:center;gap:.7rem;min-width:0}
 .logo{height:56px;width:56px;flex:none;object-fit:contain;border-radius:12px;background:#fff}
 .who{display:flex;flex-direction:column;gap:.15rem}
+.who-chip{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:0;padding:.3rem .65rem;border:1px solid var(--line,#ccc);border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer;min-height:40px;justify-content:center}
+.who-chip span{font-weight:700;font-size:.9rem;line-height:1.1}
+.who-chip small{font-size:.66rem;color:var(--muted);text-decoration:underline}
 .who label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .tabs{display:flex;gap:.35rem;margin-top:.6rem;padding-bottom:.6rem}
 .tab{--c:90,169,230;flex:1 1 0;min-width:0;text-align:center;padding:.45rem .3rem;text-decoration:none;color:var(--fg);font-weight:600;font-size:.92rem;border-radius:10px;background:rgba(var(--c),.16);border:1.5px solid rgba(var(--c),.30);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1039,10 +1042,9 @@ function view(){
   else if(S.tab==="profesorado")body=vTeachers();
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
   else body=vMine()+(S.askTeam?"":vRanking());
-  var opts='<option value="">—</option>';for(var i=1;i<=TEAMS;i++)opts+='<option value="'+i+'"'+(S.team===i?" selected":"")+'>'+i+'</option>';
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
   return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>MonasFIT Salud</h1></div></div>'+
-    '<div class="who"><label for="teamSel">Soy el equipo</label><select id="teamSel" data-change="team">'+opts+'</select></div></div>'+
+    (S.team?'<button class="who-chip" data-act="changeTeam" aria-label="Equipo '+S.team+'. Cambiar de equipo"><span>Equipo '+S.team+'</span><small>Cambiar</small></button>':'')+'</div>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
 function render(){
@@ -1101,6 +1103,7 @@ var actions={
   confNo:function(d){S.askNo=null;run(async function(){var r=await api("confirm",{method:"POST",body:{id:d.id,answer:"no",team:S.team}});await refresh();return r;},"Hecho: la sesión pasa a otro equipo.");},
   admOk:function(d){run(async function(){await api("confirm",{method:"POST",body:{id:d.id,answer:"ok"}});await refresh();},"Sesión dada por confirmada.");},
   pickTeam:function(d){chooseTeam(Number(d.n));},
+  changeTeam:function(){if(S.fdata&&S.fdata.role!=="key"&&S.fdata.role!=="admin"){S.fk=null;S.fdata=null;}S.askTeam=null;setTeam(null);S.tab="mi-equipo";if(location.hash!=="#mi-equipo")location.hash="#mi-equipo";render();},
   teamLogin:function(){
     var n=S.askTeam,key=val("tk-in").trim();if(!n)return;
     if(!key){S.tkErr="Escribe la clave de tu equipo.";render();return;}
