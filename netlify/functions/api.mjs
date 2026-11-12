@@ -173,7 +173,7 @@ function cleanTeachers(v) {
   for (const k of keys) {
     if (!/^[a-z0-9-]{1,80}$/.test(k)) continue;
     const t = v[k] || {};
-    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS), course: str(t.course, 12).trim(), archived: !!t.archived };
+    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS), course: str(t.course, 12).trim(), archived: !!t.archived, ...(t.needsVal ? { needsVal: true } : {}) };
   }
   return out;
 }
@@ -460,9 +460,15 @@ async function book(b) {
     if (here.length >= st.cap) fail("Esa franja está completa.");
 
     const tdata = { ...teachers.data };
-    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false };
+    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true };
     let teachersDirty = !tdata[tk];
     if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
+    // Profesor nuevo: primero valoración y prescripción; hasta entonces no puede reservar entrenamiento guiado.
+    if (type === "E" && t.needsVal) {
+      const pr = await store().get("prescriptions/" + tk, { type: "json" });
+      if (!pr) fail("Como es tu primera vez en el proyecto, primero te hacemos la valoración y el equipo te prepara la prescripción. Reserva una valoración; cuando tu prescripción esté lista podrás reservar entrenamientos.");
+      delete t.needsVal; teachersDirty = true;
+    }
     const priorV = list.find((x) => x.tkey === tk && x.type === "V" && x.team && x.conf !== "pending" && !x.subst);
     if (!t.valTeam && priorV) { t.valTeam = priorV.team; teachersDirty = true; }
     const pendV = list.find((x) => x.tkey === tk && x.type === "V" && x.team && !x.subst);

@@ -576,7 +576,6 @@ function vMine(){
     html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' sesiones anteriores ('+past.length+')</button></div>';
     if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
   }
-  if(S.teamKeysSet[S.team])html+='<p style="margin-top:1.4rem"><button class="btn sm" data-act="teamRekey">Cambiar la clave de mi equipo</button></p>';
   return html;
 }
 function vAgenda(){
@@ -1283,7 +1282,7 @@ var actions={
   },
   fDown:function(d){
     var k=S.fk,doc=(S.fdata.ficha.docs||[]).filter(function(x){return x.id===d.id;})[0];if(!doc)return;
-    var h={};Object.assign(h,fHeaders(k));if(S.code)h["x-code"]=S.code;if(S.adminPass)h["x-admin"]=S.adminPass;
+    var h={};Object.assign(h,fHeaders(k));if(S.team&&!S.admin&&S.teamKeys[S.team])h["x-team-key"]=S.teamKeys[S.team];if(S.code)h["x-code"]=S.code;if(S.adminPass)h["x-admin"]=S.adminPass;
     fetch("/api/doc?tkey="+encodeURIComponent(k)+"&id="+encodeURIComponent(d.id),{headers:h}).then(function(r){
       if(!r.ok)return r.json().then(function(j){throw new Error((j&&j.error)||"No se pudo descargar.");});
       return r.blob();
