@@ -275,6 +275,10 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 @media(min-width:600px){.sheet-bg{align-items:center;padding:16px}.sheet{border-radius:18px}}
 .sheet .btn.cta{flex:1}
 .wrap{padding-bottom:5.5rem}
+ .due{display:inline-block;font-size:.74rem;font-weight:600;padding:.15rem .55rem;border-radius:999px;border:1px solid var(--line);background:var(--surface-2);color:var(--ink,inherit)}
+.due-soon{background:#fff3d6;border-color:#f0c969;color:#6b4a00}.due-late{background:#fde1df;border-color:#ee9a94;color:#7d1a14}.due-booked,.due-first{background:#e0f2e6;border-color:#9fd3ae;color:#16502a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .due-soon{background:#3d3210;border-color:#8a6d1c;color:#ffd978}:root:not([data-theme="light"]) .due-late{background:#44201e;border-color:#a3453f;color:#ffb3ad}:root:not([data-theme="light"]) .due-booked,:root:not([data-theme="light"]) .due-first{background:#173524;border-color:#2e7a4a;color:#a6e3bb}}
+:root[data-theme="dark"] .due-soon{background:#3d3210;border-color:#8a6d1c;color:#ffd978}:root[data-theme="dark"] .due-late{background:#44201e;border-color:#a3453f;color:#ffb3ad}:root[data-theme="dark"] .due-booked,:root[data-theme="dark"] .due-first{background:#173524;border-color:#2e7a4a;color:#a6e3bb}
 </style>
 </head>
 <body>
@@ -465,6 +469,43 @@ function parseBulk(text){
 }
 
 /* ---------- Permisos de vista ---------- */
+/* ---- Valoración cada 4 semanas: cuenta atrás por profesor ---- */
+var DUE_DAYS=28,DUE_WARN=7;
+function daysBetween(a,b){var x=a.split("-").map(Number),y=b.split("-").map(Number);return Math.round((Date.UTC(y[0],y[1]-1,y[2])-Date.UTC(x[0],x[1]-1,x[2]))/86400000);}
+function shortDate(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{day:"numeric",month:"short"});}
+function dueInfo(k){
+  var today=todayStr();
+  var vs=S.bookings.filter(function(b){return b.tkey===k&&b.type==="V"&&b.team;}).sort(function(a,b){return a.date<b.date?-1:1;});
+  if(!vs.length)return null;
+  var past=vs.filter(function(b){return b.date<=today;}),fut=vs.filter(function(b){return b.date>today;});
+  var last=past.length?past[past.length-1].date:null,next=fut.length?fut[0].date:null;
+  if(!last)return {state:"first",next:next};
+  var due=addDays(last,DUE_DAYS),days=daysBetween(today,due);
+  if(next&&next>=addDays(last,1))return {state:"booked",last:last,due:due,days:days,next:next};
+  return {state:days<0?"late":(days<=DUE_WARN?"soon":"ok"),last:last,due:due,days:days};
+}
+function dueText(i){
+  if(!i)return "";
+  if(i.state==="first")return "Primera valoración reservada el "+shortDate(i.next);
+  if(i.state==="booked")return "Próxima valoración reservada el "+shortDate(i.next);
+  if(i.state==="late")return "Valoración retrasada "+(-i.days)+" día"+(i.days===-1?"":"s")+" (tocaba el "+shortDate(i.due)+")";
+  if(i.days===0)return "Hoy toca la valoración";
+  return "Próxima valoración en "+i.days+" día"+(i.days===1?"":"s")+" ("+shortDate(i.due)+")";
+}
+function dueTag(k){var i=dueInfo(k);if(!i)return "";return '<span class="due due-'+i.state+'">'+esc(dueText(i))+'</span>';}
+function dueList(keys,title,note){
+  var rows=keys.map(function(k){return {k:k,i:dueInfo(k)};}).filter(function(x){return x.i&&(x.i.state==="late"||x.i.state==="soon");}).sort(function(a,b){return a.i.days-b.i.days;});
+  if(!rows.length)return "";
+  return '<div class="card due-card"><h3>'+title+'</h3>'+(note?'<p class="muted small">'+note+'</p>':'')+rows.map(function(x){return '<div class="list-row"><span>'+esc(S.teachers[x.k].name)+(S.admin&&vTeamOf(x.k)?' <small class="muted">· equipo '+vTeamOf(x.k)+'</small>':'')+'</span>'+dueTag(x.k)+'</div>';}).join("")+'</div>';
+}
+function activeKeys(){return Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;});}
+function dueCardTeam(){
+  var ks=activeKeys().filter(function(k){return vTeamOf(k)===S.team;});
+  var c=dueList(ks,"Valoraciones que os tocan","Cada profesor se valora cada 4 semanas. Avisadle para que reserve su cita.");
+  var rest=ks.map(function(k){return {k:k,i:dueInfo(k)};}).filter(function(x){return x.i&&(x.i.state==="ok"||x.i.state==="booked"||x.i.state==="first");});
+  if(rest.length&&!S.admin)c+='<div class="card"><h3>Vuestros profesores</h3>'+rest.map(function(x){return '<div class="list-row"><span>'+esc(S.teachers[x.k].name)+'</span>'+dueTag(x.k)+'</div>';}).join("")+'</div>';
+  return c;
+}
 function vTeamOf(k){var t=S.teachers[k];if(t&&t.valTeam)return t.valTeam;var b=S.bookings.filter(function(x){return x.tkey===k&&x.type==="V"&&x.team&&x.conf!=="pending"&&!x.subst;})[0];return b?b.team:null;}
 function canEditPres(k){return !!(S.admin||S.team);}
 function canSee(k){return !!(S.admin||S.team);}
@@ -550,6 +591,7 @@ function vMine(){
   var up=mine.filter(function(b){return b.date>=today;}),past=mine.filter(function(b){return b.date<today;});
   var html='<p class="eyebrow">Equipo '+S.team+'</p><h2 style="margin-top:0">'+(membersOf(S.team)?esc(membersOf(S.team)):"Tu agenda")+'</h2>';
   var pm=pendingMine();
+  html+=dueCardTeam();
   if(pm.length)html+='<div class="confbox"><h3>⏳ Por confirmar ('+pm.length+')</h3><p class="small">Se os ha asignado esta sesión. Confirmad si podéis venir; si no, pasará a otro equipo.</p>'+pm.map(confCard).join("")+'</div>';
   if(up.length){
     var nx=up[0],ntag=dayTag(nx.date);
@@ -618,7 +660,7 @@ function vTeachers(){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
     html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">Valora el equipo '+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+
-      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&canSee(k)?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
+      (dueTag(k)?'<p style="margin:.2rem 0">'+dueTag(k)+'</p>':'')+'<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&(vTeamOf(k)===S.team||S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending";}))?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
       var btns='<button class="btn sm primary" data-act="openFicha" data-k="'+esc(k)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha</button>';
@@ -726,6 +768,7 @@ function vFicha(){
   var ro=d.role==="trainer";
   var html='<p><button class="btn sm" data-act="fClose">← Volver al profesorado</button></p>'+
     '<p class="eyebrow">Ficha personal</p><h2 style="margin-top:0">'+esc(d.name)+'</h2><p class="muted small">'+who+' Estos datos son privados: no los compartas.</p>';
+  if(dueTag(k))html+='<p>'+dueTag(k)+'</p>';
 
   // La valoración, la prescripción y la entrevista se hacen en la app de rutinas MonasFIT:
   // aquí la ficha solo guarda los documentos que genera. Ponlo en false para volver a mostrar esas secciones.
@@ -831,6 +874,7 @@ function vAdmin(){
   var html='<h2 style="margin-top:0">Gestión</h2>';
   if(!S.bookings.length)html+='<div class="note ok">Las reservas llegan solas cuando el profesorado reserva en la pestaña «Reservar». Antes, revisa la disponibilidad y escribe los equipos. Si ya tienes reservas en otra app, pégalas en «Pegar varias reservas».</div>';
 
+  html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
     '<div class="row"><label for="nextSel" style="margin:0">Próximo equipo</label><select id="nextSel" data-change="next">'+teamOptions(S.config.nextTeam,false)+'</select>'+
