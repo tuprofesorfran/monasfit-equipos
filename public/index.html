@@ -206,6 +206,20 @@ pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
 .load{display:grid;grid-template-columns:3.2rem 1fr 2rem;gap:.5rem;align-items:center;margin:.25rem 0;font-size:.88rem}
 .load .bar{display:flex;height:.8rem;background:var(--line);border-radius:6px;overflow:hidden}.load .bar i{display:block;height:100%}.load .bar .g{background:#2e9e6a}.load .bar .o{background:#f6a65a}
 .load b{text-align:right}
+/* ---- v1.12.2 cabecera y botón Ranking en móvil ---- */
+@media (max-width:560px){
+.brand{flex-wrap:nowrap;gap:.5rem;align-items:center}
+.brandL{flex:1 1 auto;gap:.5rem}
+.brandL .logo{width:46px;height:46px}
+.brand h1{font-size:1.45rem;line-height:1.05}
+.brand .eyebrow{font-size:.62rem;letter-spacing:.06em}
+.who{flex:none;align-items:flex-end}
+.who label{font-size:.6rem;letter-spacing:.05em}
+.who select{width:4.3rem;min-height:40px;padding:.2rem .4rem;font-size:1.05rem}
+.fab{padding:.5rem;width:56px;height:56px;justify-content:center;bottom:max(12px,env(safe-area-inset-bottom,0px))}
+.fab-t{display:none}
+.fab-i{font-size:1.9rem}
+}
 /* ---- v1.12 calendario más legible ---- */
 @media (max-width:560px){
 .cal.rv{grid-template-columns:3.1rem repeat(5,minmax(0,1fr))}
