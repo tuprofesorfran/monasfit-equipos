@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2a66a8">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="MonasFIT Reservas">
 <title>MonasFIT Salud</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
@@ -224,7 +230,7 @@ var TABS=[["reservar","Reservar","📅"],["agenda","Agenda","📋"],["profesorad
 var DEF_SET={cap:4,open:{1:[1,2],2:[1,5,6],3:[1,2,3,4],4:[3,4,5],5:[4,5]},resp:{"1-1":"Fernando","1-2":"Fernando","2-1":"Fernando","2-5":"Fran","2-6":"Fran","3-1":"Fernando","3-2":"Fernando","3-3":"Fran","3-4":"Fran","4-3":"Fran","4-4":"Fran","4-5":"Fran","5-4":"Fernando","5-5":"Fernando"},closed:[],horizon:21};
 var SLOT_MIN=[null,475,530,585,670,725,780];
 var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
-  tab:"mi-equipo",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
+  tab:"reservar",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
   rev:{config:0,teams:0,teachers:0,bookings:0,settings:0},
   name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
@@ -972,7 +978,7 @@ function say(text,kind){
   S.msg=text;S.msgKind=kind||"ok";clearTimeout(msgTimer);
   if(text)msgTimer=setTimeout(function(){S.msg="";render();},6000);
 }
-function logoutAdmin(){S.admin=false;S.adminPass="";ssSet("monasfit.admin","");if(S.tab==="gestion")S.tab="mi-equipo";}
+function logoutAdmin(){S.admin=false;S.adminPass="";ssSet("monasfit.admin","");if(S.tab==="gestion")S.tab="reservar";}
 async function run(fn,okMsg){
   if(S.busy)return;
   S.busy=true;render();
@@ -1329,7 +1335,6 @@ async function init(){
   readHash();render();
   if(S.adminPass){try{await api("admin-check");S.admin=true;}catch(e){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");}}
   await refresh();
-  if(S.admin&&!location.hash)S.tab=S.team?"mi-equipo":"gestion";
   render();
   // Se actualiza solo con la pestaña visible y sin abusar del servidor (cada 2 minutos como mucho).
   var last=Date.now();
