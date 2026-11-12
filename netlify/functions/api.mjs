@@ -152,6 +152,15 @@ function cleanBookings(v) {
       tkey: str(b.tkey, 80),
       team: b.team == null ? null : int(b.team, 1, TEAMS),
       createdAt: Number(b.createdAt) || 0,
+      conf: ["pending", "ok"].includes(b.conf) ? b.conf : undefined,
+      dueAt: Number(b.dueAt) || undefined,
+      assignedAt: Number(b.assignedAt) || undefined,
+      confirmedAt: Number(b.confirmedAt) || undefined,
+      subst: b.subst === true ? true : undefined,
+      auto: b.auto === true ? true : undefined,
+      declined: Array.isArray(b.declined) && b.declined.length
+        ? b.declined.slice(0, 20).map((d) => ({ t: int(d && d.t, 1, TEAMS), why: ["no", "timeout", "admin"].includes(d && d.why) ? d.why : "no", at: Number(d && d.at) || 0 })).filter((d) => d.t)
+        : undefined,
     });
   }
   return out;
@@ -210,36 +219,160 @@ const cmp = (a, b) =>
   a.date.localeCompare(b.date) || a.slot - b.slot || (TYPE_RANK[a.type] || 0) - (TYPE_RANK[b.type] || 0) ||
   (a.createdAt || 0) - (b.createdAt || 0) || String(a.id).localeCompare(String(b.id));
 
-function planAssign(bookings, teachers, ptr) {
+// Reparto equitativo: cada sesión sin equipo va al equipo libre en esa franja que lleva MENOS sesiones
+// (si empatan, el siguiente en el orden de rotación desde "ptr"). Los equipos que ya renunciaron a esa sesión se saltan.
+// La valoración de un profesor la hace siempre su equipo; si ese equipo renunció a esa sesión, la hace otro (subst).
+// onlyIds (opcional): solo se asignan esas reservas.
+function planAssign(bookings, teachers, ptr, onlyIds) {
   const all = bookings.map((b) => ({ ...b }));
   const val = {};
   Object.keys(teachers).forEach((k) => { val[k] = teachers[k].valTeam || null; });
-  const pend = all.filter((b) => !b.team).sort(cmp);
+  all.filter((b) => b.type === "V" && b.team && !b.subst).sort(cmp).forEach((b) => { if (!val[b.tkey]) val[b.tkey] = b.team; });
+  const load = {};
+  for (let t = 1; t <= TEAMS; t++) load[t] = 0;
+  all.forEach((b) => { if (b.team) load[b.team]++; });
+  const pend = all.filter((b) => !b.team && (!onlyIds || onlyIds.has(b.id))).sort(cmp);
   const assign = [], vals = [];
   for (const b of pend) {
-    let team = null;
-    if (b.type === "V" && val[b.tkey]) team = val[b.tkey];
+    const dec = (b.declined || []).map((d) => d.t);
+    let team = null, subst = false;
+    const busy = {};
+    all.forEach((x) => { if (x.team && x.date === b.date && x.slot === b.slot) busy[x.team] = 1; });
+    if (b.type === "V" && val[b.tkey] && !dec.includes(val[b.tkey]) && !busy[val[b.tkey]]) team = val[b.tkey];
     else {
-      const busy = {};
-      all.forEach((x) => { if (x.team && x.date === b.date && x.slot === b.slot) busy[x.team] = 1; });
+      if (b.type === "V" && val[b.tkey]) subst = true;
+      let best = null;
       for (let i = 0; i < TEAMS; i++) {
         const c = ((ptr - 1 + i) % TEAMS) + 1;
-        if (!busy[c]) { team = c; ptr = (c % TEAMS) + 1; break; }
+        if (busy[c] || dec.includes(c)) continue;
+        if (best === null || load[c] < load[best]) best = c;
       }
-      if (b.type === "V" && team) { val[b.tkey] = team; vals.push({ tkey: b.tkey, team }); }
+      if (best) { team = best; ptr = (best % TEAMS) + 1; }
+      if (b.type === "V" && team && !val[b.tkey]) { val[b.tkey] = team; vals.push({ tkey: b.tkey, team }); }
     }
-    if (team) { b.team = team; assign.push({ id: b.id, team }); }
+    if (team) { b.team = team; load[team]++; assign.push({ id: b.id, team, subst }); }
   }
   return { assign, vals, ptr };
+}
+
+/* ---------- Confirmación del equipo asignado ---------- */
+const RESPOND_H = 12;  // el equipo puede responder hasta 12 h antes de la sesión
+const GRACE_MIN = 180; // si se le asigna tarde, tiene al menos 3 h para responder
+const LAST_MIN = 60;   // y nunca se espera más allá de 1 h antes del inicio
+const dayNum = (s) => { const [y, m, d] = parts(s); return Date.UTC(y, m - 1, d) / 86400000; };
+function minsToStart(date, slot) {
+  const n = madridNow();
+  return (dayNum(date) - dayNum(n.date)) * 1440 + SLOT_START_MIN[slot] - n.min;
+}
+function dueFor(b, nowMs) {
+  const start = nowMs + minsToStart(b.date, b.slot) * 60000;
+  return Math.min(start - LAST_MIN * 60000, Math.max(start - RESPOND_H * 3600000, nowMs + GRACE_MIN * 60000));
+}
+// Marca una asignación hecha por el sistema como "pendiente de confirmar" (o confirmada si ya no hay tiempo de esperar)
+function stampPending(b, nowMs) {
+  b.assignedAt = nowMs;
+  delete b.confirmedAt;
+  const due = dueFor(b, nowMs);
+  if (due <= nowMs) { b.conf = "ok"; b.auto = true; delete b.dueAt; }
+  else { b.conf = "pending"; b.dueAt = Math.round(due); delete b.auto; }
+}
+// La valoración confirmada fija el equipo que valora al profesor (salvo una sustitución puntual)
+function settleVal(b, tdata) {
+  if (b.type === "V" && b.team && b.conf !== "pending" && !b.subst && tdata[b.tkey] && !tdata[b.tkey].valTeam) {
+    tdata[b.tkey] = { ...tdata[b.tkey], valTeam: b.team };
+    return true;
+  }
+  return false;
+}
+const needSweep = (list, nowMs) => list.some((b) => b.conf === "pending" && ((b.team && b.dueAt && nowMs >= b.dueAt) || (!b.team && b.declined && b.declined.length)));
+// Pasa al siguiente equipo las sesiones cuyo plazo ha vencido, y reintenta las que se quedaron sin equipo
+function sweepBookings(list, teachers, ptr, nowMs) {
+  const all = list.map((b) => ({ ...b }));
+  const tdata = { ...teachers };
+  const reset = new Set();
+  let changed = false, tchanged = false;
+  for (const b of all) {
+    if (b.conf === "pending" && b.team && b.dueAt && nowMs >= b.dueAt) {
+      b.declined = [...(b.declined || []), { t: b.team, why: "timeout", at: nowMs }];
+      b.team = null; b.subst = undefined; delete b.dueAt;
+      reset.add(b.id); changed = true;
+    } else if (b.conf === "pending" && !b.team && b.declined && b.declined.length) reset.add(b.id);
+  }
+  if (reset.size) {
+    const plan = planAssign(all, tdata, ptr, reset);
+    ptr = plan.ptr;
+    for (const a of plan.assign) {
+      const b = all.find((x) => x.id === a.id);
+      b.team = a.team; b.subst = a.subst || undefined; stampPending(b, nowMs); changed = true;
+      if (settleVal(b, tdata)) tchanged = true;
+    }
+  }
+  return { all, tdata, ptr, changed, tchanged };
+}
+async function runSweep() {
+  return withLock(async () => {
+    const [cfg, teachers, bookings] = await Promise.all(["config", "teachers", "bookings"].map(read));
+    const nowMs = Date.now();
+    if (!needSweep(bookings.data, nowMs)) return;
+    const r = sweepBookings(bookings.data, teachers.data, Math.min(TEAMS, Math.max(1, Number(cfg.data.nextTeam) || 1)), nowMs);
+    if (!r.changed) return;
+    if (r.tchanged) await write("teachers", teachers, r.tdata);
+    await write("config", cfg, { nextTeam: r.ptr, updatedAt: nowMs });
+    await write("bookings", bookings, r.all);
+  });
+}
+async function respond(req, b, admin) {
+  const id = str(b && b.id, 40);
+  const ans = b && b.answer;
+  if (!["ok", "no"].includes(ans)) fail("Respuesta no válida.");
+  let team = int(b && b.team, 1, TEAMS);
+  if (!admin) {
+    if (!team) fail("Elige tu equipo.");
+    if (!(await teamAuth(req, team, true))) fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
+  }
+  return withLock(async () => {
+    const [cfg, teams, teachers, bookings] = await Promise.all(["config", "teams", "teachers", "bookings"].map(read));
+    const all = bookings.data.map((x) => ({ ...x }));
+    const bk = all.find((x) => x.id === id);
+    if (!bk) fail("Esa sesión ya no existe.");
+    if (!bk.team) fail("Ahora mismo esta sesión no tiene equipo asignado.");
+    if (admin) team = bk.team;
+    if (team !== bk.team) fail("Esta sesión ya no es de tu equipo.");
+    if (minsToStart(bk.date, bk.slot) <= 0) fail("Esa sesión ya ha empezado.");
+    const nowMs = Date.now();
+    const tdata = { ...teachers.data };
+    if (ans === "ok") {
+      if (bk.conf === "pending") {
+        bk.conf = "ok"; bk.confirmedAt = nowMs; delete bk.dueAt; delete bk.auto;
+        if (settleVal(bk, tdata)) await write("teachers", teachers, tdata);
+        await write("bookings", bookings, all);
+      }
+      return { ok: true, booking: bk };
+    }
+    // Renuncia: la sesión pasa al equipo libre con menos sesiones
+    bk.declined = [...(bk.declined || []), { t: team, why: admin ? "admin" : "no", at: nowMs }];
+    bk.team = null; bk.subst = undefined; bk.conf = "pending"; delete bk.dueAt; delete bk.confirmedAt; delete bk.auto;
+    const plan = planAssign(all, tdata, Math.min(TEAMS, Math.max(1, Number(cfg.data.nextTeam) || 1)), new Set([id]));
+    let tch = false;
+    for (const a of plan.assign) {
+      bk.team = a.team; bk.subst = a.subst || undefined; stampPending(bk, nowMs);
+      if (settleVal(bk, tdata)) tch = true;
+    }
+    if (tch) await write("teachers", teachers, tdata);
+    await write("config", cfg, { nextTeam: plan.ptr, updatedAt: nowMs });
+    await write("bookings", bookings, all);
+    const tm = bk.team && teams.data[bk.team];
+    return { ok: true, booking: bk, now: bk.team || null, members: (tm && tm.members) || "" };
+  });
 }
 
 /* ---------- Quién ve y quién escribe cada prescripción ---------- */
 const sees = (tkey, team, teachers, bookings) =>
   (teachers[tkey] && teachers[tkey].valTeam === team) ||
-  bookings.some((b) => b.tkey === tkey && b.team === team);
+  bookings.some((b) => b.tkey === tkey && b.team === team && b.conf !== "pending");
 const edits = (tkey, team, teachers, bookings) =>
   (teachers[tkey] && teachers[tkey].valTeam === team) ||
-  bookings.some((b) => b.tkey === tkey && b.type === "V" && b.team === team);
+  bookings.some((b) => b.tkey === tkey && b.type === "V" && b.team === team && b.conf !== "pending" && !b.subst);
 
 // Equipos que ya han atendido a un profesor: el que lo valora (V) y los que lo han entrenado (E, hasta hoy).
 function rateTeams(t, tkey, bookings) {
@@ -265,6 +398,7 @@ async function book(b) {
   if (!["E", "V"].includes(type)) fail("Elige entrenamiento o valoración.");
   if (!validDate(date) || !slot) fail("Fecha o franja no válida.");
 
+  await runSweep();
   return withLock(async () => {
     const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
     // Con correos registrados, quien reserva se identifica con su correo corporativo.
@@ -317,19 +451,20 @@ async function book(b) {
     const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false };
     let teachersDirty = !tdata[tk];
     if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
-    const priorV = list.find((x) => x.tkey === tk && x.type === "V" && x.team);
+    const priorV = list.find((x) => x.tkey === tk && x.type === "V" && x.team && x.conf !== "pending" && !x.subst);
     if (!t.valTeam && priorV) { t.valTeam = priorV.team; teachersDirty = true; }
-    if (type === "V" && t.valTeam && here.some((x) => x.team === t.valTeam))
-      fail(`A ti te valora siempre el equipo ${t.valTeam}, que a esa hora ya tiene otra sesión. Elige otra franja.`);
+    const pendV = list.find((x) => x.tkey === tk && x.type === "V" && x.team && !x.subst);
+    const vt = t.valTeam || (pendV && pendV.team) || null;
+    if (type === "V" && vt && here.some((x) => x.team === vt))
+      fail(`A ti te valora siempre el equipo ${vt}, que a esa hora ya tiene otra sesión. Elige otra franja.`);
     tdata[tk] = t;
 
     const id = randomBytes(5).toString("hex") + Date.now().toString(36);
     const nb = { id, date, slot, type, teacher: t.name || name, tkey: tk, team: null, createdAt: Date.now() };
     const all = [...list, nb];
     const ptr = Math.min(TEAMS, Math.max(1, Number(cfg.data.nextTeam) || 1));
-    const plan = planAssign(all, tdata, ptr);
-    plan.vals.forEach((v) => { if (tdata[v.tkey]) { tdata[v.tkey] = { ...tdata[v.tkey], valTeam: v.team }; teachersDirty = true; } });
-    plan.assign.forEach((a) => { const x = all.find((y) => y.id === a.id); if (x) x.team = a.team; });
+    const plan = planAssign(all, tdata, ptr, new Set([id]));
+    plan.assign.forEach((a) => { const x = all.find((y) => y.id === a.id); if (x) { x.team = a.team; x.subst = a.subst || undefined; stampPending(x, Date.now()); if (settleVal(x, tdata)) teachersDirty = true; } });
     if (!nb.team) fail("En esa franja no queda ningún equipo libre. Elige otra.");
 
     if (teachersDirty) await write("teachers", teachers, tdata);
@@ -359,7 +494,7 @@ async function cancel(b) {
     await write("bookings", bookings, rest);
     if (bk.type === "V" && !rest.some((x) => x.tkey === bk.tkey && x.type === "V")) {
       const t = teachers.data[bk.tkey];
-      if (t && t.valTeam === bk.team) await write("teachers", teachers, { ...teachers.data, [bk.tkey]: { ...t, valTeam: null } });
+      if (t && t.valTeam === bk.team && !bk.subst) await write("teachers", teachers, { ...teachers.data, [bk.tkey]: { ...t, valTeam: null } });
     }
     if (bk.type === "E" && bk.team && !rest.some((x) => x.type === "E" && x.createdAt > bk.createdAt)) {
       // Era el último entrenamiento asignado: el turno vuelve a ese equipo (no se "gasta" la rotación).
@@ -385,7 +520,7 @@ const DOC_TYPES = {
 };
 
 // Equipo que entrena (o ha entrenado) a un profesor: solo consulta su ficha.
-const trains = (tkey, team, bookings) => bookings.some((b) => b.tkey === tkey && b.type === "E" && b.team === team);
+const trains = (tkey, team, bookings) => bookings.some((b) => b.tkey === tkey && b.team === team && b.conf !== "pending" && (b.type === "E" || b.subst));
 
 // Clave de equipo (alumnado). Si el equipo aún no tiene clave, el acceso sigue abierto como antes.
 async function teamAuth(req, team, count) {
@@ -713,6 +848,7 @@ export default async (req) => {
     }
 
     if (route === "state" && req.method === "GET") {
+      if (needSweep((await read("bookings")).data, Date.now())) await runSweep();
       const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
       const team = int(url.searchParams.get("team"), 1, TEAMS);
       const s = store();
@@ -753,7 +889,8 @@ export default async (req) => {
         });
       }
       const ranking = Object.entries(agg).map(([t, a]) => ({ team: Number(t), avg: a.sum / a.n, n: a.n })).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
-      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet });
+      const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
+      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet });
     }
 
     {
@@ -765,6 +902,11 @@ export default async (req) => {
       let b;
       try { b = await req.json(); } catch { return json({ error: "Petición no válida." }, 400); }
       return json(await book(b));
+    }
+    if (route === "confirm" && req.method === "POST") {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: "Petición no válida." }, 400); }
+      return json(await respond(req, b, admin));
     }
     if (route === "cancel" && req.method === "POST") {
       let b;
