@@ -541,6 +541,7 @@ function confCard(b){
     (ask?'<p class="small"><strong>¿Seguro que no podéis?</strong> La sesión pasará a otro equipo.</p><div class="row"><button class="btn danger" data-act="confNo" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>Sí, no podemos</button><button class="btn" data-act="askNoCancel">Volver</button></div>'
       :'<div class="row"><button class="btn cta" data-act="confOk" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>✓ Confirmamos</button><button class="btn" data-act="askNo" data-id="'+esc(b.id)+'">No podemos</button></div>')+'</div>';
 }
+function vDone(k){var t=todayStr();return S.bookings.some(function(b){return b.tkey===k&&b.type==="V"&&b.team&&b.date<=t&&!isPend(b);});}
 function membersOf(n){var t=S.teams[n];return t&&t.members?t.members:"";}
 function presView(p){
   return '<dl class="pres">'+
@@ -675,7 +676,7 @@ function vTeachers(){
   ks.forEach(function(k){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
-    html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">Valora el equipo '+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+
+    html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">'+(vDone(k)?'Valoración realizada por equipo ':'Valora el equipo ')+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+(vt&&membersOf(vt)?'<p class="muted small" style="margin:.25rem 0 0">👥 '+esc(membersOf(vt))+'</p>':'')+
       (dueTag(k)?'<p style="margin:.2rem 0">'+dueTag(k)+'</p>':'')+'<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&(vTeamOf(k)===S.team||S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending";}))?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
