@@ -53,3 +53,9 @@ Arrastrar la carpeta directamente a Netlify no sirve aquí, porque el servidor n
 En **Profesorado → Abrir ficha** cada profesor entra con su clave personal y ve su valoración corporal, la prescripción, la entrevista y sus documentos (PDF o imagen, máximo 4 MB).
 El coordinador crea las claves en **Gestión → Profesorado y claves** (se muestran una sola vez), añade profesores nuevos y archiva a los de cursos anteriores.
 Los datos de las fichas no se ven en el estado público de la app: solo con la clave del profesor, la contraseña de coordinación o desde el equipo que lo valora.
+
+## Reservar con correo corporativo
+
+Cuando hay al menos un correo registrado (Gestión → Profesorado y claves), el profesorado reserva con su correo corporativo en lugar del nombre; si el correo no está en la lista, la app avisa. Los correos solo los ve el coordinador. El formato de importación es `Nombre, correo, equipo de valoración` (una persona por línea).
+
+Un profesor nuevo puede unirse él mismo: en su primera reserva escribe su correo (del mismo dominio que los ya registrados) y, cuando la app se lo pide, su nombre y apellidos. Se rechazan correos de otro dominio y los que parecen una errata de uno ya registrado.

@@ -182,7 +182,7 @@ var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
   bulkErr:[],noRestore:false,scrollEditor:false,
-  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false,fall:null,impErr:[]};
+  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false,fall:null,impErr:[],emailMode:false,emails:{},email:"",myTk:"",needName:false};
 
 var $app=document.getElementById("app");
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -244,7 +244,7 @@ async function refresh(){
   try{
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
     Object.keys(S.tokens).forEach(function(id){if(!ids[id]){delete S.tokens[id];ch=true;}});if(ch)saveTokens();
@@ -555,12 +555,15 @@ function vAdminTeachers(){
   var nokey=act.filter(function(k){return !S.keys[k];}).length;
   var html='<div class="card"><h3>Profesorado y claves</h3><p class="muted small">Cada profesor entra en su ficha (Profesorado → Abrir ficha) con su clave. Genérala aquí y entrégasela. Curso actual: <strong>'+cur+'</strong>.</p>';
   if(S.fnew)html+='<div class="note ok"><strong>Clave de '+esc((S.teachers[S.fnew.tkey]||{}).name||S.fnew.tkey)+'</strong><br><span class="fkey">'+esc(S.fnew.key)+'</span><br><span class="small">Anótala ahora: no se puede volver a ver (si se pierde, genera otra). La anterior deja de valer.</span> <button class="btn sm" data-act="fNewOk">Ya la he anotado</button></div>';
+  var emOf={};Object.keys(S.emails||{}).forEach(function(e){emOf[S.emails[e]]=e;});
+  html+='<div class="note'+(S.emailMode?' ok':'')+' small">'+(S.emailMode?'<strong>Reserva con correo activada.</strong> Solo pueden reservar los correos registrados ('+Object.keys(S.emails||{}).length+'). Para dar de alta a alguien nuevo, añade su correo aquí.':'Todavía no hay ningún correo registrado: el profesorado reserva escribiendo su nombre. En cuanto registres el primer correo, pasarán a reservar con el correo corporativo.')+'</div>';
   html+='<div class="grid2"><div><label for="nt-name">Añadir profesor</label><input id="nt-name" data-keep autocomplete="off" placeholder="Nombre y apellido"></div>'+
+    '<div><label for="nt-email">Correo corporativo</label><input id="nt-email" data-keep type="email" autocomplete="off" autocapitalize="off" placeholder="nombre@centro.es"></div>'+
     '<div><label for="nt-course">Curso</label><input id="nt-course" data-keep autocomplete="off" value="'+cur+'"></div></div>'+
     '<div class="row" style="margin:.6rem 0"><button class="btn primary" data-act="addTeacher"'+(S.busy?" disabled":"")+'>Añadir al profesorado</button>'+
     (old?'<button class="btn" data-act="archiveOld"'+(S.busy?" disabled":"")+'>Archivar los de cursos anteriores ('+old+')</button>':'')+'</div>'+
-    '<label for="nt-bulk">Pegar varios profesores</label><textarea id="nt-bulk" data-keep rows="4" placeholder="Víctor Sepulcre, 1&#10;Paula Serra, 1&#10;Bernardo Benito, 2"></textarea>'+
-    '<p class="muted small">Una persona por línea: el nombre y, separado por una coma, el equipo que la valora (1 a 12, opcional).</p>'+
+    '<label for="nt-bulk">Pegar varios profesores</label><textarea id="nt-bulk" data-keep rows="4" placeholder="Víctor Sepulcre, victor@centro.es, 1&#10;Paula Serra, paula@centro.es, 1"></textarea>'+
+    '<p class="muted small">Una persona por línea: nombre, correo corporativo y equipo que la valora (1 a 12), separados por comas. El correo y el equipo son opcionales.</p>'+
     (S.impErr.length?'<div class="note err small">'+S.impErr.map(esc).join("<br>")+'</div>':'')+
     '<div class="row" style="margin:.4rem 0 .8rem"><button class="btn primary" data-act="importTeachers"'+(S.busy?" disabled":"")+'>Importar profesorado</button>'+
     (nokey?'<button class="btn" data-act="genKeysAll"'+(S.busy?" disabled":"")+'>Generar claves de los '+nokey+' sin clave</button>':'')+'</div>'+
@@ -569,7 +572,8 @@ function vAdminTeachers(){
   list.forEach(function(k){
     var t=S.teachers[k],has=!!S.keys[k];
     html+='<div class="list-row"><div class="what"><strong>'+esc(t.name)+'</strong>'+(t.archived?'<span class="tag">Archivado</span>':'')+'<span class="tag'+(has?' on':'')+'">'+(has?"Con clave":"Sin clave")+'</span>'+
-      '<div class="row" style="margin-top:.3rem"><label class="small muted" for="tc-'+esc(k)+'" style="margin:0">Curso</label><input id="tc-'+esc(k)+'" data-change="tCourse" data-k="'+esc(k)+'" value="'+esc(t.course||"")+'" style="width:6.5rem" autocomplete="off"></div></div>'+
+      '<div class="row" style="margin-top:.3rem"><label class="small muted" for="tc-'+esc(k)+'" style="margin:0">Curso</label><input id="tc-'+esc(k)+'" data-change="tCourse" data-k="'+esc(k)+'" value="'+esc(t.course||"")+'" style="width:6.5rem" autocomplete="off"></div>'+
+      '<div class="row" style="margin-top:.3rem"><label class="small muted" for="te-'+esc(k)+'" style="margin:0">Correo</label><input id="te-'+esc(k)+'" type="email" data-change="tEmail" data-k="'+esc(k)+'" value="'+esc(emOf[k]||"")+'" placeholder="sin correo" autocapitalize="off" autocomplete="off" style="flex:1;min-width:10rem"></div></div>'+
       '<div class="row" style="justify-content:flex-end">'+
       (S.confirmKey===k?'<button class="btn sm danger" data-act="genKeyYes" data-k="'+esc(k)+'">Sí, nueva clave</button><button class="btn sm" data-act="genKeyNo">No</button>':
         '<button class="btn sm" data-act="genKey" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>'+(has?"Nueva clave":"Generar clave")+'</button>')+
@@ -691,13 +695,16 @@ function selPanel(st,today,last,tk){
 function vReservar(){
   var st=S.settings||DEF_SET,today=todayStr(),last=addDays(today,st.horizon);
   var base=mondayOf(addDays(today,S.weekOff*7));
-  var tk=S.name.trim().length>=2?tkeyOf(S.name):"";
-  var html='<h2 style="margin-top:0">Reserva tu hora</h2><p class="muted">Pon tu nombre, elige el tipo de sesión y toca una franja libre del calendario. Al reservar verás al momento qué equipo te atiende.</p>';
+  var tk=S.emailMode?(S.email&&S.myTk?S.myTk:""):(S.name.trim().length>=2?tkeyOf(S.name):"");
+  var html='<h2 style="margin-top:0">Reserva tu hora</h2><p class="muted">Pon tu '+(S.emailMode?"correo corporativo":"nombre")+', elige el tipo de sesión y toca una franja libre del calendario. Al reservar verás al momento qué equipo te atiende.</p>';
   if(S.lastBook)html+=bookDone(S.lastBook);
   var names=Object.keys(S.teachers).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
-  html+='<div class="card"><label for="bk-name" style="margin-top:0">Tu nombre</label>'+
+  html+='<div class="card">'+(S.emailMode?
+    '<label for="bk-email" style="margin-top:0">Tu correo corporativo</label>'+
+    '<input id="bk-email" data-keep data-change="bkemail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="'+esc(S.email)+'" placeholder="nombre.apellido@centro.es">'+(S.needName?'<label for="bk-fullname">Tu nombre y apellidos</label><input id="bk-fullname" data-keep autocomplete="name" placeholder="Por ejemplo: Laura Justamante"><p class="muted small" style="margin:.3rem 0 0">Es tu primera vez en el proyecto: con tu nombre te das de alta. Después solo necesitarás el correo.</p>':''):
+    '<label for="bk-name" style="margin-top:0">Tu nombre</label>'+
     '<input id="bk-name" data-keep data-change="bkname" list="tl2" autocomplete="off" value="'+esc(S.name)+'" placeholder="Por ejemplo: Laura J.">'+
-    '<datalist id="tl2">'+names.map(function(n){return '<option value="'+esc(n)+'">';}).join("")+'</datalist>'+
+    '<datalist id="tl2">'+names.map(function(n){return '<option value="'+esc(n)+'">';}).join("")+'</datalist>')+
     '<p class="muted small" style="margin-top:.3rem">Escríbelo siempre igual, para que se reconozca tu equipo de valoración.</p>'+
     '<label>¿Qué necesitas?</label><div class="filters">'+
     '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button>'+
@@ -899,15 +906,34 @@ var actions={
   closeDone:function(){S.lastBook=null;render();},
   doBook:function(){
     var c=S.confirmBook;if(!c)return;
-    var nm=val("bk-name").trim().replace(/\s+/g," ");
-    if(nm.length<2){say("Escribe tu nombre antes de reservar.","err");S.scrollTop=true;render();return;}
-    if(nm!==S.name){S.name=nm;lsSet("monasfit.name",nm);}
+    var who;
+    if(S.emailMode){
+      var em=val("bk-email").trim().toLowerCase();
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){say("Escribe tu correo corporativo completo antes de reservar.","err");S.scrollTop=true;render();return;}
+      if(em!==S.email){S.email=em;S.myTk="";lsSet("monasfit.email",em);lsSet("monasfit.tkey","");}
+      who={email:em};
+      if(S.needName){
+        var fn=val("bk-fullname").trim().replace(/\s+/g," ");
+        if(fn.length<2){say("Escribe tu nombre y apellidos para unirte al proyecto.","err");S.scrollTop=true;render();return;}
+        who.name=fn;
+      }
+    }else{
+      var nm=val("bk-name").trim().replace(/\s+/g," ");
+      if(nm.length<2){say("Escribe tu nombre antes de reservar.","err");S.scrollTop=true;render();return;}
+      if(nm!==S.name){S.name=nm;lsSet("monasfit.name",nm);}
+      who={name:S.name};
+    }
     run(async function(){
       try{
-        var r=await api("book",{method:"POST",body:{name:S.name,type:S.btype,date:c.date,slot:c.slot}});
-        S.tokens[r.booking.id]=r.token;saveTokens();S.lastBook=r;S.confirmBook=null;S.scrollTop=true;
+        var r=await api("book",{method:"POST",body:Object.assign({type:S.btype,date:c.date,slot:c.slot},who)});
+        S.tokens[r.booking.id]=r.token;saveTokens();S.lastBook=r;S.confirmBook=null;S.scrollTop=true;S.needName=false;
+        if(S.emailMode){S.myTk=r.booking.tkey;lsSet("monasfit.tkey",S.myTk);}
         await refresh();
-      }catch(e){S.confirmBook=null;throw e;}
+      }catch(e){
+        if(e.data&&e.data.needName){S.needName=true;S.scrollTop=true;}
+        else{S.needName=false;S.confirmBook=null;S.scrollTop=true;}
+        throw e;
+      }
     },"");
   },
   askCancel:function(d){S.confirmCancel=d.id;render();},
@@ -1001,27 +1027,24 @@ var actions={
     var errs=[],items=[];
     val("nt-bulk").split(/\r?\n/).forEach(function(line,i){
       line=line.trim();if(!line)return;
-      var m=/^(.*?)[,;\t]\s*(\d{1,2})?\s*$/.exec(line),nm=line,tm=null;
-      if(m){nm=m[1].trim();if(m[2]){tm=Number(m[2]);if(tm<1||tm>TEAMS){errs.push("Línea "+(i+1)+": el equipo debe ser de 1 a "+TEAMS+".");return;}}}
-      nm=nm.replace(/\s+/g," ");
+      var f=line.split(/[,;\t]/).map(function(x){return x.trim();}).filter(function(x){return x;});
+      var em=f.filter(function(x){return x.indexOf("@")>=0;})[0]||"";
+      var tmS=f.filter(function(x){return /^\d{1,2}$/.test(x);})[0],tm=tmS?Number(tmS):null;
+      var nm=(f.filter(function(x){return x.indexOf("@")<0&&!/^\d{1,2}$/.test(x);})[0]||"").replace(/\s+/g," ");
+      if(tm&&(tm<1||tm>TEAMS)){errs.push("Línea "+(i+1)+": el equipo debe ser de 1 a "+TEAMS+".");return;}
       if(nm.length<2){errs.push("Línea "+(i+1)+": falta el nombre.");return;}
-      items.push({name:nm,team:tm});
+      if(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){errs.push("Línea "+(i+1)+": el correo no es válido.");return;}
+      items.push({name:nm,email:em,team:tm});
     });
     S.impErr=errs;
     if(!items.length){say(errs.length?"Revisa las líneas con error.":"Pega al menos un profesor.","err");render();return;}
     run(async function(){
-      var add=0,upd=0;
-      items.forEach(function(it){
-        var existed=!!S.teachers[tkeyOf(it.name)],k=ensureTeacher(it.name),t=S.teachers[k];
-        if(!t.course)t.course=courseNow();
-        t.archived=false;
-        if(it.team)t.valTeam=it.team;
-        if(existed)upd++;else add++;
-      });
-      await saveColl("teachers");
-      if(!errs.length)S.noRestore=true;
-      return {add:add,upd:upd};
-    },function(r){return r.add+" profesor"+(r.add===1?"":"es")+" añadido"+(r.add===1?"":"s")+(r.upd?" y "+r.upd+" actualizado"+(r.upd===1?"":"s"):"")+".";});
+      var r=await api("import-teachers",{method:"POST",body:{items:items}});
+      S.impErr=errs.concat(r.errors||[]);
+      await refresh();
+      if(!S.impErr.length)S.noRestore=true;
+      return r;
+    },function(r){return r.added+" profesor"+(r.added===1?"":"es")+" añadido"+(r.added===1?"":"s")+(r.updated?" y "+r.updated+" actualizado"+(r.updated===1?"":"s"):"")+".";});
   },
   genKeysAll:function(){
     run(async function(){
@@ -1038,11 +1061,15 @@ var actions={
   },
   fAllOk:function(){S.fall=null;render();},
   addTeacher:function(){
-    var nm=val("nt-name").trim().replace(/\s+/g," "),co=val("nt-course").trim()||courseNow();
+    var nm=val("nt-name").trim().replace(/\s+/g," "),em=val("nt-email").trim(),co=val("nt-course").trim()||courseNow();
     if(nm.length<2){say("Escribe el nombre del profesor.","err");render();return;}
+    if(em&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){say("El correo no es válido.","err");render();return;}
     run(async function(){
-      var k=ensureTeacher(nm);S.teachers[k].course=co;S.teachers[k].archived=false;
-      await saveColl("teachers");S.noRestore=true;
+      var r=await api("import-teachers",{method:"POST",body:{items:[{name:nm,email:em,team:null}]}});
+      if(r.errors&&r.errors.length)throw new Error(r.errors[0]);
+      await refresh();
+      var k=tkeyOf(nm);if(S.teachers[k]&&co!==S.teachers[k].course){S.teachers[k].course=co;await saveColl("teachers");}
+      S.noRestore=true;
     },"Profesor añadido.");
   },
   tArch:function(d){
@@ -1059,6 +1086,11 @@ var actions={
   }
 };
 var changes={
+  bkemail:function(el){var v=el.value.trim().toLowerCase();if(v!==S.email){S.needName=false;S.email=v;S.myTk="";lsSet("monasfit.email",v);lsSet("monasfit.tkey","");}},
+  tEmail:function(el){
+    var k=el.dataset.k,v=el.value.trim();
+    run(async function(){await api("teacher-email",{method:"POST",body:{tkey:k,email:v}});await refresh();},v?"Correo guardado.":"Correo quitado.");
+  },
   bkname:function(el){S.name=el.value.trim().replace(/\s+/g," ");lsSet("monasfit.name",S.name);},
   sdCap:function(el){sdGet().cap=Number(el.value);render();},
   sdWeeks:function(el){sdGet().horizon=Number(el.value)*7;render();},
@@ -1102,7 +1134,7 @@ function readHash(){
 window.addEventListener("hashchange",function(){readHash();render();window.scrollTo(0,0);});
 
 async function init(){
-  S.code=lsGet("monasfit.code");S.name=lsGet("monasfit.name");S.tokens=loadTokens();
+  S.code=lsGet("monasfit.code");S.name=lsGet("monasfit.name");S.email=lsGet("monasfit.email");S.myTk=lsGet("monasfit.tkey");S.tokens=loadTokens();
   var t=lsGet("monasfit.team");if(t)S.team=Number(t)||null;
   S.adminPass=ssGet("monasfit.admin");
   try{S.fpass=JSON.parse(ssGet("monasfit.fk")||"{}")||{};}catch(e){S.fpass={};}

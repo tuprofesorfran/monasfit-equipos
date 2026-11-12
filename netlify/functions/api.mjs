@@ -24,6 +24,7 @@ const FALLBACK = {
   teachers: {},
   bookings: [],
   settings: DEFAULT_SETTINGS,
+  emails: {},
 };
 // Minuto del día en que empieza cada franja (7:55, 8:50, 9:45, 11:10, 12:05, 13:00)
 const SLOT_START_MIN = [null, 475, 530, 585, 670, 725, 780];
@@ -37,8 +38,8 @@ const json = (data, status = 200) =>
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
 // Error de regla de negocio (se enseña tal cual a quien reserva)
-class Rule extends Error {}
-const fail = (msg) => { throw new Rule(msg); };
+class Rule extends Error { constructor(m, data) { super(m); this.data = data; } }
+const fail = (msg, data) => { throw new Rule(msg, data); };
 
 const digest = (s) => createHash("sha256").update(String(s)).digest();
 const same = (a, b) => !!a && !!b && timingSafeEqual(digest(a), digest(b));
@@ -56,6 +57,20 @@ const int = (v, a, b) => {
   return Number.isInteger(n) && n >= a && n <= b ? n : null;
 };
 const str = (v, max) => String(v == null ? "" : v).slice(0, max);
+// Distancia de edición (para detectar erratas al escribir un correo)
+const editDist = (a, b) => {
+  if (Math.abs(a.length - b.length) > 1) return 2;
+  const m = a.length, n = b.length;
+  let prev = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) {
+    const cur = [i];
+    for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    prev = cur;
+  }
+  return prev[n];
+};
+const normEmail = (s) => String(s == null ? "" : s).trim().toLowerCase();
+const EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
 const tkeyOf = (n) =>
   String(n).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || "sin-nombre";
 
@@ -228,17 +243,43 @@ const edits = (tkey, team, teachers, bookings) =>
 
 /* ---------- Reservar y cancelar (profesorado) ---------- */
 async function book(b) {
-  const name = str(b && b.name, 60).trim().replace(/\s+/g, " ");
   const type = b && b.type;
   const date = str(b && b.date, 10);
   const slot = int(b && b.slot, 1, 6);
-  if (name.length < 2) fail("Escribe tu nombre.");
   if (!["E", "V"].includes(type)) fail("Elige entrenamiento o valoración.");
   if (!validDate(date) || !slot) fail("Fecha o franja no válida.");
-  const tk = tkeyOf(name);
 
   return withLock(async () => {
     const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
+    // Con correos registrados, quien reserva se identifica con su correo corporativo.
+    const emails = await read("emails");
+    let name, tk, newEmail = null;
+    if (Object.keys(emails.data).length) {
+      const em = normEmail(b && b.email);
+      if (!em || !EMAIL_RE.test(em) || em.length > 120) fail("Escribe tu correo corporativo completo.");
+      tk = emails.data[em];
+      if (tk && teachers.data[tk]) name = teachers.data[tk].name;
+      else {
+        // Correo nuevo: puede unirse al proyecto si es del mismo dominio que los ya registrados
+        // y no parece una errata de un correo existente.
+        const [loc, dom] = em.split("@");
+        const known = Object.keys(emails.data).map((e) => e.split("@"));
+        if (!known.some((k) => k[1] === dom))
+          fail("Ese correo no es del dominio del proyecto. Usa tu correo corporativo.");
+        if (known.some((k) => k[1] === dom && editDist(k[0], loc) <= 1))
+          fail("Ese correo se parece mucho a otro ya registrado. Revisa que esté bien escrito; si de verdad es el tuyo, pide al coordinador que te añada.");
+        const nm = str(b && b.name, 60).trim().replace(/\s+/g, " ");
+        if (nm.length < 2) fail("Es tu primera vez en el proyecto: escribe tu nombre y apellidos para unirte.", { needName: true });
+        tk = tkeyOf(nm);
+        if (teachers.data[tk]) fail("Ya hay alguien con ese nombre en el proyecto. Pide al coordinador que asocie tu correo.");
+        name = nm;
+        newEmail = em;
+      }
+    } else {
+      name = str(b && b.name, 60).trim().replace(/\s+/g, " ");
+      if (name.length < 2) fail("Escribe tu nombre.");
+      tk = tkeyOf(name);
+    }
     const st = settings.data;
     const now = madridNow();
     if (date < now.date) fail("Esa fecha ya ha pasado.");
@@ -276,6 +317,7 @@ async function book(b) {
     if (!nb.team) fail("En esa franja no queda ningún equipo libre. Elige otra.");
 
     if (teachersDirty) await write("teachers", teachers, tdata);
+    if (newEmail) await write("emails", emails, { ...emails.data, [newEmail]: tk });
     await write("config", cfg, { nextTeam: plan.ptr, updatedAt: Date.now() });
     await write("bookings", bookings, all);
     const token = randomBytes(18).toString("hex");
@@ -389,6 +431,60 @@ async function readJson(req) { try { return await req.json(); } catch { fail("Pe
 
 async function fichaRoutes(route, req, url, admin) {
   const q = (n) => str(url.searchParams.get(n), 120);
+  if (route === "import-teachers" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador puede importar profesorado.");
+    const b = await readJson(req);
+    const items = Array.isArray(b && b.items) ? b.items.slice(0, 300) : [];
+    if (!items.length) fail("No hay profesores que importar.");
+    return withLock(async () => {
+      const [teachers, emails] = await Promise.all([read("teachers"), read("emails")]);
+      const tdata = { ...teachers.data }, edata = { ...emails.data };
+      let added = 0, updated = 0;
+      const errors = [];
+      for (const it of items) {
+        const name = str(it && it.name, 80).trim().replace(/\s+/g, " ");
+        if (name.length < 2) { errors.push("Falta el nombre en una línea."); continue; }
+        const tk = tkeyOf(name);
+        const em = normEmail(it.email);
+        if (em && (!EMAIL_RE.test(em) || em.length > 120)) { errors.push(name + ": el correo no es válido."); continue; }
+        if (em && edata[em] && edata[em] !== tk) { errors.push(name + ": ese correo ya es de " + ((tdata[edata[em]] || {}).name || edata[em]) + "."); continue; }
+        const team = it.team ? int(it.team, 1, TEAMS) : null;
+        const old = tdata[tk];
+        const t = old ? { ...old } : { tkey: tk, name, valTeam: null, course: "", archived: false };
+        if (!t.course) t.course = courseNow();
+        t.archived = false;
+        if (team) t.valTeam = team;
+        tdata[tk] = t;
+        if (em) {
+          for (const k of Object.keys(edata)) if (edata[k] === tk && k !== em) delete edata[k];
+          edata[em] = tk;
+        }
+        old ? updated++ : added++;
+      }
+      if (added || updated) {
+        await write("teachers", teachers, tdata);
+        await write("emails", emails, edata);
+      }
+      return json({ ok: true, added, updated, errors });
+    });
+  }
+  if (route === "teacher-email" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador puede cambiar correos.");
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80), em = normEmail(b && b.email);
+    if (!TKEY_RE.test(tkey)) fail("Profesor no válido.");
+    if (em && (!EMAIL_RE.test(em) || em.length > 120)) fail("El correo no es válido.");
+    return withLock(async () => {
+      const [teachers, emails] = await Promise.all([read("teachers"), read("emails")]);
+      if (!teachers.data[tkey]) fail("Ese profesor no existe.");
+      const edata = { ...emails.data };
+      if (em && edata[em] && edata[em] !== tkey) fail("Ese correo ya es de " + ((teachers.data[edata[em]] || {}).name || edata[em]) + ".");
+      for (const k of Object.keys(edata)) if (edata[k] === tkey) delete edata[k];
+      if (em) edata[em] = tkey;
+      await write("emails", emails, edata);
+      return json({ ok: true });
+    });
+  }
   if (route === "ficha-key" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador puede generar claves.");
     const b = await readJson(req);
@@ -494,13 +590,16 @@ export default async (req) => {
         if (!p || !p.tkey) continue;
         if (admin || (team && sees(p.tkey, team, teachers.data, bookings.data))) prescriptions[p.tkey] = p;
       }
-      let keys;
+      const em = await read("emails");
+      const emailMode = Object.keys(em.data).length > 0;
+      let keys, emailList;
       if (admin) {
+        emailList = em.data;
         keys = {};
         const kl = await s.list({ prefix: "keys/" });
         for (const b of kl.blobs) keys[b.key.slice(5)] = true;
       }
-      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys });
+      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys, emailMode, emails: emailList });
     }
 
     {
@@ -567,7 +666,7 @@ export default async (req) => {
 
     return json({ error: "No encontrado." }, 404);
   } catch (e) {
-    if (e instanceof Rule) return json({ error: e.message }, 422);
+    if (e instanceof Rule) return json({ error: e.message, ...(e.data || {}) }, 422);
     if (e && e.busy) return json({ error: "Hay mucha gente reservando a la vez. Inténtalo de nuevo en unos segundos." }, 503);
     console.error(e);
     return json({ error: "Error del servidor." }, 500);
