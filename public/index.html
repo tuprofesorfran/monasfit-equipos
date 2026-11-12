@@ -220,6 +220,9 @@ pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
 .fab-t{display:none}
 .fab-i{font-size:1.9rem}
 }
+/* ---- v1.13 criterios de valoración ---- */
+.rit{padding:.35rem 0;border-top:1px dashed var(--line)}.rit-l{font-weight:600;font-size:.92rem}.rit .stars{margin:.1rem 0 0}.rit .star{font-size:1.6rem}
+.rank{flex-wrap:wrap}.rank .rsub{flex-basis:100%;margin-left:2.6rem;font-size:.78rem;color:var(--muted)}
 /* ---- v1.12 calendario más legible ---- */
 @media (max-width:560px){
 .cal.rv{grid-template-columns:3.1rem repeat(5,minmax(0,1fr))}
@@ -647,16 +650,25 @@ function docCat(x){return x.cat&&docLabel(x.cat)!=="OTRO DOCUMENTO"||x.cat==="ot
 function catOpts(sel,blank){var o=blank?'<option value="">Elige el tipo…</option>':"";DOC_CATS.forEach(function(c){o+='<option value="'+c[0]+'"'+(sel===c[0]?" selected":"")+'>'+c[1]+'</option>';});return o;}
 function starsTxt(n){var s="";for(var i=1;i<=5;i++)s+=i<=n?"★":"☆";return s;}
 function shortD(s){var p=s.split("-");return Number(p[2])+"/"+Number(p[1]);}
+var RATE_ITEMS={
+  V:[["puntualidad","Puntualidad y preparación"],["trato","Trato y claridad al explicar"],["tecnica","Corrección y seguridad de las mediciones"],["prescripcion","Utilidad y claridad de la prescripción"],["global","Repetiría con este equipo"]],
+  E:[["puntualidad","Puntualidad y preparación"],["trato","Trato y motivación"],["tecnica","Corrección y seguridad en los ejercicios"],["adaptacion","Adaptación de los ejercicios a mi nivel"],["global","Repetiría con este equipo"]]
+};
+function fmt1(x){return String(Math.round(x*10)/10).replace(".",",");}
 function vRate(d){
   var teams=d.rateTeams||[];
-  var html='<div class="card"><h3>Valora a tus equipos</h3><p class="muted small" style="margin-top:0">Cuéntanos qué tal te ha ido con el equipo que te valoró y con los que te han entrenado. Solo lo ve la coordinación.</p>';
+  var html='<div class="card"><h3>Valora a tus equipos</h3><p class="muted small" style="margin-top:0">Cuéntanos qué tal te ha ido con el equipo que te valoró y con los que te han entrenado. Solo lo ve la coordinación y sirve para el ranking.</p><p class="muted small">Guía: <strong>3 ★ = cumplió lo esperado</strong> · 5 ★ = superó lo esperado · 1 ★ = hay que mejorar mucho.</p>';
   if(!teams.length)html+='<p class="muted small">Cuando un equipo te atienda podrás valorarlo aquí.</p>';
   teams.forEach(function(x){
-    var k=x.kind+":"+x.team,saved=(d.ratings||{})[k]||null,dr=S.rdraft[k],n=dr!=null?dr:(saved?saved.stars:0);
+    var k=x.kind+":"+x.team,saved=(d.ratings||{})[k]||null,sc=(saved&&saved.scores)||{};
     var lbl=x.kind==="V"?"Equipo "+x.team+" · te hizo la valoración":"Equipo "+x.team+" · te entrenó"+(x.dates&&x.dates.length?" ("+x.dates.map(shortD).join(", ")+")":"");
-    var st="";for(var i=1;i<=5;i++)st+='<button class="star'+(i<=n?" on":"")+'" data-act="rStar" data-k="'+k+'" data-n="'+i+'" aria-label="'+i+' de 5 estrellas">'+(i<=n?"★":"☆")+'</button>';
-    html+='<p class="rate-t">'+esc(lbl)+'</p><div class="stars" role="group" aria-label="Puntuación">'+st+'</div>'+
-      '<label for="rc-'+x.kind+'-'+x.team+'">Comentario (opcional)</label><textarea id="rc-'+x.kind+'-'+x.team+'" data-keep rows="2" placeholder="Qué te ha gustado y qué mejorarías">'+esc(saved?saved.comment:"")+'</textarea>'+
+    html+='<p class="rate-t">'+esc(lbl)+'</p>';
+    RATE_ITEMS[x.kind].forEach(function(it){
+      var dk=k+"|"+it[0],dr=S.rdraft[dk],n=dr!=null?dr:(sc[it[0]]||0),st="";
+      for(var i=1;i<=5;i++)st+='<button class="star'+(i<=n?" on":"")+'" data-act="rStar" data-k="'+dk+'" data-n="'+i+'" aria-label="'+esc(it[1])+': '+i+' de 5 estrellas">'+(i<=n?"★":"☆")+'</button>';
+      html+='<div class="rit"><span class="rit-l">'+esc(it[1])+'</span><div class="stars" role="group" aria-label="'+esc(it[1])+'">'+st+'</div></div>';
+    });
+    html+='<label for="rc-'+x.kind+'-'+x.team+'">Comentario (opcional): un punto fuerte y algo a mejorar</label><textarea id="rc-'+x.kind+'-'+x.team+'" data-keep rows="2" placeholder="Qué te ha gustado y qué mejorarías">'+esc(saved?saved.comment:"")+'</textarea>'+
       '<div class="row" style="margin-top:.5rem"><button class="btn primary sm" data-act="rSave" data-k="'+k+'"'+(S.busy?" disabled":"")+'>'+(saved?"Actualizar valoración":"Enviar valoración")+'</button>'+(saved?'<span class="muted small">Enviada el '+esc(fmtShort(saved.at))+'</span>':"")+'</div>';
   });
   return html+'</div>';
@@ -678,9 +690,13 @@ function vFab(){
   if(S.rankOpen)h+='<div class="sheet-bg" data-act="rankClose"><div class="sheet" role="dialog" aria-modal="true" aria-label="Ranking de equipos"><button class="btn sm sheet-x" data-act="rankClose">Cerrar ✕</button>'+vRanking()+'</div></div>';
   return h;
 }
+function rankSub(r){
+  var a=[];if(r.vAvg!=null)a.push("Valoración "+fmt1(r.vAvg));if(r.eAvg!=null)a.push("Entrenamiento "+fmt1(r.eAvg));
+  return '<span class="rsub">'+a.join(" · ")+(a.length===1?" · aún sin la otra nota":"")+'</span>';
+}
 function vRanking(){
   var R=S.ranking||[],med=["🥇","🥈","🥉"];
-  var html='<div class="card"><h3>Ranking de equipos</h3><p class="muted small" style="margin-top:0">Se ordena por la nota media que da el profesorado a los equipos que lo valoran y lo entrenan. Sube cuando llegan buenas valoraciones.</p>';
+  var html='<div class="card"><h3>Ranking de equipos</h3><p class="muted small" style="margin-top:0">Nota = media de lo que puntúa el profesorado en las valoraciones y en los entrenamientos (a partes iguales). Sube cuando llegan buenas puntuaciones.</p>';
   if(!R.length)return html+'<p class="muted small">Todavía no hay valoraciones. En cuanto el profesorado puntúe, aparecerá aquí la clasificación.</p></div>';
   if(R.length>=3){
     var po=[1,0,2];html+='<div class="podium">';
@@ -690,7 +706,7 @@ function vRanking(){
   R.forEach(function(r,i){
     if(R.length>=3&&i<3)return;
     var mine=S.team===r.team;
-    html+='<div class="rank'+(i<3?" gold":"")+(mine?" mine":"")+'"><span class="pos">'+(i<3?med[i]:(i+1)+'º')+'</span><span class="rn"><strong>Equipo '+r.team+'</strong>'+(membersOf(r.team)?'<span class="muted small"> · '+esc(membersOf(r.team))+'</span>':"")+'</span><span class="rs"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> <strong>'+String(Math.round(r.avg*10)/10).replace(".",",")+'</strong> <span class="muted small">('+r.n+')</span></span></div>';
+    html+='<div class="rank'+(i<3?" gold":"")+(mine?" mine":"")+'"><span class="pos">'+(i<3?med[i]:(i+1)+'º')+'</span><span class="rn"><strong>Equipo '+r.team+'</strong>'+(membersOf(r.team)?'<span class="muted small"> · '+esc(membersOf(r.team))+'</span>':"")+'</span><span class="rs"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> <strong>'+String(Math.round(r.avg*10)/10).replace(".",",")+'</strong> <span class="muted small">('+r.n+')</span></span>'+rankSub(r)+'</div>';
   });
   var none=[];for(var t=1;t<=TEAMS;t++)if(!R.some(function(r){return r.team===t;}))none.push(t);
   if(none.length)html+='<p class="muted small" style="margin-bottom:0">Aún sin valoraciones: equipo'+(none.length>1?"s ":" ")+none.join(", ")+'.</p>';
@@ -704,7 +720,7 @@ function vRatings(){
     var L=R.filter(function(r){return r.team===t;});if(!L.length)continue;
     var avg=L.reduce(function(a,r){return a+r.stars;},0)/L.length;
     html+='<div class="rrow"><strong>Equipo '+t+'</strong> · <span style="color:#f6a65a">'+starsTxt(Math.round(avg))+'</span> '+String(Math.round(avg*10)/10).replace(".",",")+' ('+L.length+(L.length===1?" valoración":" valoraciones")+')';
-    L.forEach(function(r){html+='<div class="small muted">'+esc(r.teacher)+' ('+(r.kind==="V"?"valoración":"entrenamiento")+'): '+starsTxt(r.stars)+(r.comment?' «'+esc(r.comment)+'»':"")+'</div>';});
+    L.forEach(function(r){var det="";if(r.scores)det=' <span class="small">['+RATE_ITEMS[r.kind].map(function(it){return it[1].split(" ")[0]+" "+(r.scores[it[0]]||"-");}).join(" · ")+']</span>';html+='<div class="small muted">'+esc(r.teacher)+' ('+(r.kind==="V"?"valoración":"entrenamiento")+'): '+starsTxt(Math.round(r.stars))+' '+fmt1(r.stars)+det+(r.comment?' «'+esc(r.comment)+'»':"")+'</div>';});
     html+='</div>';
   }
   return html+'</div>';
@@ -1251,11 +1267,12 @@ var actions={
   rankClose:function(d,ev){S.rankOpen=false;S.noRestore=true;render();},
   rStar:function(d){S.rdraft[d.k]=Number(d.n);render();},
   rSave:function(d){
-    var k=d.k,pr=k.split(":"),kind=pr[0],team=Number(pr[1]),saved=((S.fdata.ratings||{})[k]||null);
-    var n=S.rdraft[k]!=null?S.rdraft[k]:(saved?saved.stars:0);
-    if(!n){say("Elige de 1 a 5 estrellas.","err");render();return;}
+    var k=d.k,pr=k.split(":"),kind=pr[0],team=Number(pr[1]),saved=((S.fdata.ratings||{})[k]||null),old=(saved&&saved.scores)||{};
+    var scores={},ok=true;
+    RATE_ITEMS[kind].forEach(function(it){var v=S.rdraft[k+"|"+it[0]];if(v==null)v=old[it[0]]||0;if(!v)ok=false;scores[it[0]]=v;});
+    if(!ok){say("Puntúa todos los apartados de 1 a 5 estrellas.","err");render();return;}
     var kk=S.fk;
-    run(async function(){var r=await api("rate",{method:"POST",headers:fHeaders(kk),body:{tkey:kk,kind:kind,team:team,stars:n,comment:val("rc-"+kind+"-"+team)}});S.fdata.ratings=r.ratings;delete S.rdraft[k];S.noRestore=true;},"Valoración enviada. ¡Gracias!");
+    run(async function(){var r=await api("rate",{method:"POST",headers:fHeaders(kk),body:{tkey:kk,kind:kind,team:team,scores:scores,comment:val("rc-"+kind+"-"+team)}});S.fdata.ratings=r.ratings;Object.keys(S.rdraft).forEach(function(x){if(x.indexOf(k+"|")===0)delete S.rdraft[x];});S.noRestore=true;},"Valoración enviada. ¡Gracias!");
   },
   fDelVal:function(d){S.confirmVal=d.id;render();},
   fDelValNo:function(){S.confirmVal=null;render();},

@@ -374,6 +374,18 @@ const edits = (tkey, team, teachers, bookings) =>
   (teachers[tkey] && teachers[tkey].valTeam === team) ||
   bookings.some((b) => b.tkey === tkey && b.type === "V" && b.team === team && b.conf !== "pending" && !b.subst);
 
+// Criterios con los que el profesorado puntúa a los equipos (1 a 5), distintos para valoración y entrenamiento
+const RATE_ITEMS = {
+  V: ["puntualidad", "trato", "tecnica", "prescripcion", "global"],
+  E: ["puntualidad", "trato", "tecnica", "adaptacion", "global"],
+};
+const scoreOf = (v) => {
+  if (v && v.scores) {
+    const xs = Object.values(v.scores).map(Number).filter((n) => n >= 1 && n <= 5);
+    if (xs.length) return xs.reduce((a, n) => a + n, 0) / xs.length;
+  }
+  return Number(v && v.stars) || 0;
+};
 // Equipos que ya han atendido a un profesor: el que lo valora (V) y los que lo han entrenado (E, hasta hoy).
 function rateTeams(t, tkey, bookings) {
   const out = [];
@@ -721,14 +733,19 @@ async function fichaRoutes(route, req, url, admin) {
     const role = await fichaAccess(req, tkey, admin);
     if (role === "team" || role === "trainer") fail("Solo el profesor puede valorar a los equipos.");
     const kind = b && b.kind, team = int(b && b.team, 1, TEAMS);
-    const stars = int(b && b.stars, 1, 5);
     if (!["V", "E"].includes(kind) || !team) fail("Equipo no válido.");
-    if (!stars) fail("Elige de 1 a 5 estrellas.");
+    const scores = {};
+    for (const id of RATE_ITEMS[kind]) {
+      const n = int(b && b.scores && b.scores[id], 1, 5);
+      if (!n) fail("Puntúa todos los apartados de 1 a 5 estrellas.");
+      scores[id] = n;
+    }
+    const stars = Math.round((Object.values(scores).reduce((a, n) => a + n, 0) / RATE_ITEMS[kind].length) * 100) / 100;
     const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
     if (!rateTeams(teachers.data[tkey], tkey, bookings.data).some((x) => x.kind === kind && x.team === team)) fail("Ese equipo todavía no te ha atendido.");
     return withLock(async () => {
       const old = (await store().get("ratings/" + tkey, { type: "json" })) || {};
-      old[kind + ":" + team] = { stars, comment: str(b && b.comment, 500).trim(), at: Date.now() };
+      old[kind + ":" + team] = { scores, stars, comment: str(b && b.comment, 500).trim(), at: Date.now() };
       await store().setJSON("ratings/" + tkey, old);
       return json({ ok: true, ratings: old });
     });
@@ -881,14 +898,19 @@ export default async (req) => {
           const tk = rl.blobs[i].key.slice(8);
           for (const [k, v] of Object.entries(r || {})) {
             const [kind, team] = k.split(":");
-            const a = (agg[team] = agg[team] || { sum: 0, n: 0 });
-            a.sum += Number(v.stars) || 0;
-            a.n++;
-            if (admin) ratings.push({ tkey: tk, teacher: (teachers.data[tk] && teachers.data[tk].name) || tk, kind, team: Number(team), stars: v.stars, comment: v.comment || "", at: v.at });
+            const a = (agg[team] = agg[team] || { V: [], E: [] });
+            const sc = scoreOf(v);
+            (kind === "V" ? a.V : a.E).push(sc);
+            if (admin) ratings.push({ tkey: tk, teacher: (teachers.data[tk] && teachers.data[tk].name) || tk, kind, team: Number(team), stars: sc, scores: v.scores || null, comment: v.comment || "", at: v.at });
           }
         });
       }
-      const ranking = Object.entries(agg).map(([t, a]) => ({ team: Number(t), avg: a.sum / a.n, n: a.n })).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
+      const mean = (xs) => (xs.length ? xs.reduce((a, n) => a + n, 0) / xs.length : null);
+      const ranking = Object.entries(agg).map(([t, a]) => {
+        const vAvg = mean(a.V), eAvg = mean(a.E);
+        const parts = [vAvg, eAvg].filter((x) => x !== null);
+        return { team: Number(t), avg: parts.reduce((x, y) => x + y, 0) / parts.length, vAvg, eAvg, nV: a.V.length, nE: a.E.length, n: a.V.length + a.E.length };
+      }).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
       const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
       return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet });
     }
