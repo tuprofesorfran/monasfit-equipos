@@ -279,6 +279,9 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .due-soon{background:#fff3d6;border-color:#f0c969;color:#6b4a00}.due-late{background:#fde1df;border-color:#ee9a94;color:#7d1a14}.due-booked,.due-first{background:#e0f2e6;border-color:#9fd3ae;color:#16502a}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .due-soon{background:#3d3210;border-color:#8a6d1c;color:#ffd978}:root:not([data-theme="light"]) .due-late{background:#44201e;border-color:#a3453f;color:#ffb3ad}:root:not([data-theme="light"]) .due-booked,:root:not([data-theme="light"]) .due-first{background:#173524;border-color:#2e7a4a;color:#a6e3bb}}
 :root[data-theme="dark"] .due-soon{background:#3d3210;border-color:#8a6d1c;color:#ffd978}:root[data-theme="dark"] .due-late{background:#44201e;border-color:#a3453f;color:#ffb3ad}:root[data-theme="dark"] .due-booked,:root[data-theme="dark"] .due-first{background:#173524;border-color:#2e7a4a;color:#a6e3bb}
+.cell .cr-i{display:none;font-style:normal;margin-right:.15rem}
+@media (max-width:560px){.cell .cr-p{display:none}.cal.rv .cell{padding-inline:.18rem}.cal.rv .cell .cr{font-size:.56rem;padding:0 .12rem;letter-spacing:-.02em;font-weight:600}}
+.cal.rv + .legend.rvl{margin:.7rem 0 .2rem;justify-content:center}
 </style>
 </head>
 <body>
@@ -967,7 +970,7 @@ function calCell(c,st){
   if(c.state==="past")return '<div class="'+cls+'"><span class="ct">Ya empezó</span></div>';
   var who=c.list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
   return '<button class="'+cls+'" data-act="pick" data-d="'+c.d+'" data-s="'+c.s+'" aria-label="'+esc(fmtDate(c.d))+', '+SLOTS[c.s]+', '+c.n+' de '+st.cap+' plazas'+(c.mine?', reservada por ti':'')+'">'+
-    '<span class="cp">'+c.n+'/'+st.cap+'</span>'+(c.resp?'<span class="cr">'+esc(c.resp)+'</span>':'')+(who?'<span class="cn">'+who+'</span>':'')+
+    '<span class="cp">'+c.n+'/'+st.cap+'</span>'+(c.resp?'<span class="cr" title="Profesor responsable"><b class="cr-p">Prof. </b>'+esc(c.resp)+'</span>':'')+(who?'<span class="cn">'+who+'</span>':'')+
     (c.mine?'<span class="ct"><strong>Tuya</strong></span>':(c.state==="full"?'<span class="ct">Completa</span>':''))+'</button>';
 }
 function bookModal(st,today,last,tk){
@@ -1001,7 +1004,6 @@ function vReservar(){
   var tk=S.emailMode?(S.email&&S.myTk?S.myTk:""):(S.name.trim().length>=2?tkeyOf(S.name):"");
   var html='<div class="rv-top"><h2>Reserva tu hora</h2><div class="wk"><button class="btn sm" data-act="wkPrev" aria-label="Semana anterior"'+(S.weekOff>0?"":" disabled")+'>←</button><strong class="wkt">'+esc(wkShort(base))+'</strong>'+
     '<button class="btn sm" data-act="wkNext" aria-label="Semana siguiente"'+(addDays(base,7)<=last?"":" disabled")+'>→</button></div></div>';
-  html+='<div class="legend rvl"><span><i style="background:var(--c-free)"></i>Libre</span><span><i style="background:var(--c-part)"></i>Quedan plazas</span><span><i style="background:var(--c-full)"></i>Completo</span><span><i style="background:var(--c-na)"></i>⊘ No</span></div>';
   var g='<div class="cal rv" role="group" aria-label="Calendario semanal. Toca una franja libre para reservar"><div></div>';
   var i,sl;
   for(i=0;i<5;i++){var dd=addDays(base,i);g+='<div class="cal-h'+(dd===today?" today":"")+'">'+DAYABB[i]+'<b>'+Number(dd.slice(8))+'</b></div>';}
@@ -1011,7 +1013,7 @@ function vReservar(){
     g+='<div class="cal-t"><b>'+tt[0]+'</b><span>'+tt[1]+'</span></div>';
     for(i=0;i<5;i++)g+=calCell(cellInfo(addDays(base,i),sl,i+1,st,today,last,tk),st);
   }
-  html+=g+'</div><p class="swipe-hint">Desliza ↔ para cambiar de semana</p>';
+  html+=g+'</div>'+'<div class="legend rvl"><span><i style="background:var(--c-free)"></i>Libre</span><span><i style="background:var(--c-part)"></i>Quedan plazas</span><span><i style="background:var(--c-full)"></i>Completo</span><span><i style="background:var(--c-na)"></i>⊘ No</span></div>';
   var mine=S.bookings.filter(function(b){return b.date>=today&&((tk&&b.tkey===tk)||S.tokens[b.id]);}).sort(cmp);
   if(mine.length){
     html+='<div class="card" style="margin-top:1rem"><h3>Mis reservas</h3>';
