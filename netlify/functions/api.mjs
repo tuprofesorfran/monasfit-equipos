@@ -490,7 +490,12 @@ async function fichaRoutes(route, req, url, admin) {
     const b = await readJson(req);
     const tkey = str(b && b.tkey, 80);
     if (!TKEY_RE.test(tkey)) fail("Profesor no válido.");
-    const key = newKey();
+    let key = newKey();
+    if (b && b.key != null && b.key !== "") {          // clave elegida por el coordinador
+      const nk = normKey(b.key);
+      if (nk.length < 6 || nk.length > 24) fail("La clave debe tener entre 6 y 24 letras o números.");
+      key = nk;
+    }
     const salt = randomBytes(8).toString("hex");
     await store().setJSON("keys/" + tkey, { s: salt, h: keyHash(salt, key), at: Date.now() });
     try { await store().delete("att/" + tkey); } catch {}
