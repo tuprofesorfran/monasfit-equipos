@@ -1,6 +1,6 @@
 {
   "name": "monasfit-salud",
-  "version": "1.15.2",
+  "version": "1.17.2",
   "private": true,
   "type": "module",
   "description": "Rotación de equipos, reservas y prescripciones del Aula Ateca (IES Monastil)",

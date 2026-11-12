@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MonasFIT Reservas">
 <title>MonasFIT Salud</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600&display=swap">
 <style>
 /* Layout: app móvil de una columna. Cabecera fija con equipo y pestañas; sesiones como filas con la hora a la izquierda. */
 :root{
@@ -58,7 +58,7 @@ p{margin:.3rem 0}
 .stars{display:flex;gap:.15rem;margin:.2rem 0 .5rem}.star{border:0;background:none;font-size:1.9rem;line-height:1;padding:.1rem .2rem;color:#c9d3df;cursor:pointer;min-width:40px;min-height:44px}.star.on{color:#f6a65a}.rate-t{font-weight:700;margin:1rem 0 0}.rate-t:first-of-type{margin-top:.3rem}.rrow{border-top:1px solid var(--line);padding:.5rem 0}.rrow:first-child{border-top:0}
 .docsel{margin-top:.35rem;font-size:.8rem;padding:.25rem .4rem;min-height:0;width:auto;max-width:100%}
 .brandL{display:flex;align-items:center;gap:.7rem;min-width:0}
-.logo{height:56px;width:56px;flex:none;object-fit:contain;border-radius:12px;background:#fff}
+.logo{height:72px;width:72px;flex:none;object-fit:contain;border-radius:12px;background:#fff}
 .who{display:flex;flex-direction:column;gap:.15rem}
 .who-chip{flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:0;padding:.3rem .65rem;border:1px solid var(--line,#ccc);border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer;min-height:40px;justify-content:center}
 .who-chip span{font-weight:700;font-size:.9rem;line-height:1.1}
@@ -282,6 +282,18 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .cell .cr-i{display:none;font-style:normal;margin-right:.15rem}
 @media (max-width:560px){.cell .cr-p{display:none}.cal.rv .cell{padding-inline:.18rem}.cal.rv .cell .cr{font-size:.56rem;padding:0 .12rem;letter-spacing:-.02em;font-weight:600}}
 .cal.rv + .legend.rvl{margin:.7rem 0 .2rem;justify-content:center}
+.org{display:flex;align-items:center;gap:.5rem}
+.org img{display:block;width:auto;object-fit:contain;background:#fff;border-radius:8px;padding:2px;box-shadow:0 0 0 1px var(--line)}
+.org-d img{height:72px}.org-m{display:none}
+.brand .org-d{margin-left:auto;margin-right:.5rem}
+@media (max-width:560px){.brand .org-d{margin-right:0;gap:.35rem}.org-d img{height:46px;border-radius:7px}}
+@media (max-width:380px){.brand h1{font-size:1.3rem}.org-d img{height:40px}}
+.linkbtn{border:0;background:none;padding:0;color:inherit;font:inherit;text-decoration:underline;cursor:pointer}
+.credit-m{display:none}.credit{margin:.15rem 0 0;font-weight:700;font-size:.8rem;line-height:1.25;color:var(--muted)}
+@media (max-width:560px){.credit-d{display:none}.credit-m{display:block;font-size:max(8px,calc((100vw - 36px) / 42));font-weight:700;text-align:center;line-height:1.2;margin:.15rem 0 .45rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.brand{align-items:flex-start}.brand .org-d{margin-top:-.15rem}}
+.brand h1{font-weight:800;font-style:italic;letter-spacing:.01em;font-size:1.95rem;line-height:1;white-space:nowrap}
+.brand h1 .h1b{color:var(--accent,#1f6fd6)}
+@media (max-width:560px){.brand h1{font-size:clamp(1rem,calc((100vw - 208px) / 9.2),1.6rem)}.brandL{min-width:0}}
 </style>
 </head>
 <body>
@@ -621,6 +633,7 @@ function vMine(){
     html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' sesiones anteriores ('+past.length+')</button></div>';
     if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
   }
+  html+='<p class="muted small" style="margin-top:1.6rem;text-align:center">¿Este móvil o equipo no es del equipo '+S.team+'? <button class="linkbtn" data-act="changeTeam">Salir del equipo</button></p>';
   return html;
 }
 function vAgenda(){
@@ -1088,8 +1101,8 @@ function view(){
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
   else body=vMine()+(S.askTeam?"":vRanking());
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>MonasFIT Salud</h1></div></div>'+
-    (S.team?'<button class="who-chip" data-act="changeTeam" aria-label="Equipo '+S.team+'. Cambiar de equipo"><span>Equipo '+S.team+'</span><small>Cambiar</small></button>':'')+'</div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">SALUD</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></div>'+
+    '</div><p class="credit credit-m">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
 function render(){
