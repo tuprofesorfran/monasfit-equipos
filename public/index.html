@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#2a66a8">
-<title>Monasfit Equipos</title>
+<title>MonasFIT Salud</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Inter:wght@400;500;600&display=swap">
 <style>
 /* Layout: app móvil de una columna. Cabecera fija con equipo y pestañas; sesiones como filas con la hora a la izquierda. */
@@ -155,7 +155,7 @@ pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
 </style>
 </head>
 <body>
-<div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando Monasfit Equipos…</p></div></div>
+<div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando MonasFIT Salud…</p></div></div>
 <script>
 (function(){
 "use strict";
@@ -649,7 +649,7 @@ function vLogin(){
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="login"'+(S.busy?" disabled":"")+'>Entrar</button></div></div>';
 }
 function vCode(){
-  return '<div class="wrap"><header class="top"><p class="eyebrow">IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">Monasfit Equipos</h1></header><main>'+
+  return '<div class="wrap"><header class="top"><p class="eyebrow">IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">MonasFIT Salud</h1></header><main>'+
     '<div class="card"><h3>Código de acceso</h3><p class="muted small">Pide el código a tu profesor.</p>'+
     '<label for="code-in">Código</label><input id="code-in" data-keep autocomplete="off" autocapitalize="off">'+
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="enterCode">Entrar</button></div>'+
@@ -667,7 +667,7 @@ function view(){
   else body=vMine();
   var opts='<option value="">—</option>';for(var i=1;i<=TEAMS;i++)opts+='<option value="'+i+'"'+(S.team===i?" selected":"")+'>'+i+'</option>';
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>Monasfit Equipos</h1></div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>MonasFIT Salud</h1></div>'+
     '<div class="who"><label for="teamSel">Soy el equipo</label><select id="teamSel" data-change="team">'+opts+'</select></div></div>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+t[1]+'</a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+'</div>';
 }

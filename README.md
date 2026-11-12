@@ -1,4 +1,4 @@
-# Monasfit Equipos (IES Monastil · Aula Ateca)
+# MonasFIT Salud (IES Monastil · Aula Ateca)
 
 Rotación de los 12 equipos de alumnado en los entrenamientos del profesorado, equipo fijo en las valoraciones, agenda por equipo y prescripción enlazada a cada profesor.
 
@@ -24,7 +24,7 @@ Arrastrar la carpeta directamente a Netlify no sirve aquí, porque el servidor n
 
 ## Reservar (profesorado)
 
-- El profesorado entra en `https://monasfit-equipos.netlify.app/#reservar`, escribe su nombre, elige E o V y una franja libre. Al confirmar ve al momento qué equipo le toca.
+- El profesorado entra en `https://monasfit-salud.netlify.app/#reservar`, escribe su nombre, elige E o V y una franja libre. Al confirmar ve al momento qué equipo le toca.
 - Puede cancelar sus reservas desde el mismo móvil. Otra persona no puede cancelarlas.
 - La pantalla es un calendario semanal. Cada día solo se abren las franjas en las que el alumnado está en el aula Ateca (configuradas de serie igual que la app anterior).
 - Las plazas por franja, los días y franjas abiertas, el profesor responsable y los días cerrados se configuran en **Gestión → Disponibilidad para reservar**.
