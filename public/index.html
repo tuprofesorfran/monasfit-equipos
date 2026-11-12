@@ -49,6 +49,8 @@ p{margin:.3rem 0}
 .top::before{content:"";display:block;height:5px;margin:-.7rem -16px .6rem;background:linear-gradient(90deg,#5aa9e6,#f6a65a 55%,#ffd666)}
 .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:9;background:var(--surface);border-bottom:1px solid var(--line);margin-inline:-16px;padding:.7rem 16px 0}
 .brand{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap}
+.brandL{display:flex;align-items:center;gap:.7rem;min-width:0}
+.logo{height:56px;width:56px;flex:none;object-fit:contain;border-radius:12px;background:#fff}
 .who{display:flex;flex-direction:column;gap:.15rem}
 .who label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
 .tabs{display:flex;gap:.25rem;margin-top:.6rem;overflow-x:auto}
@@ -798,7 +800,7 @@ function view(){
   else body=vMine();
   var opts='<option value="">—</option>';for(var i=1;i<=TEAMS;i++)opts+='<option value="'+i+'"'+(S.team===i?" selected":"")+'>'+i+'</option>';
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>MonasFIT Salud</h1></div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1>MonasFIT Salud</h1></div></div>'+
     '<div class="who"><label for="teamSel">Soy el equipo</label><select id="teamSel" data-change="team">'+opts+'</select></div></div>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+t[1]+'</a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+'</div>';
 }

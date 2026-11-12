@@ -582,7 +582,27 @@ export default async (req) => {
       if (!process.env.ADMIN_PASSWORD) return json({ error: "Falta la variable ADMIN_PASSWORD en Netlify." }, 503);
       return admin ? json({ ok: true }) : json({ error: "Contraseña incorrecta." }, 401);
     }
+    // Logo del proyecto: público (lo carga <img>, que no puede mandar el código de acceso)
+    if (route === "logo" && req.method === "GET") {
+      const s = store();
+      const [buf, meta] = await Promise.all([s.get("logo", { type: "arrayBuffer" }), s.get("logo.meta", { type: "json" })]);
+      if (!buf) return new Response("", { status: 404 });
+      return new Response(buf, { headers: { "content-type": (meta && meta.type) || "image/png", "cache-control": "public, max-age=300", "x-content-type-options": "nosniff" } });
+    }
     if (!admin && !codeOk(req)) return json({ needCode: true, error: "Código de acceso necesario." }, 401);
+
+    if (route === "logo" && req.method === "POST") {
+      if (!admin) fail("Solo el coordinador puede cambiar el logo.");
+      const LT = { png: "image/png", webp: "image/webp", jpg: "image/jpeg", jpeg: "image/jpeg" };
+      const type = LT[(url.searchParams.get("type") || "").toLowerCase()];
+      if (!type) fail("Formato de logo no permitido (png, webp o jpg).");
+      const buf = await req.arrayBuffer();
+      if (!buf.byteLength) fail("El archivo está vacío.");
+      if (buf.byteLength > 1024 * 1024) fail("El logo pesa más de 1 MB.");
+      await store().set("logo", buf);
+      await store().setJSON("logo.meta", { type, at: Date.now() });
+      return json({ ok: true });
+    }
 
     if (route === "state" && req.method === "GET") {
       const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
