@@ -463,15 +463,8 @@ function parseBulk(text){
 
 /* ---------- Permisos de vista ---------- */
 function vTeamOf(k){var t=S.teachers[k];if(t&&t.valTeam)return t.valTeam;var b=S.bookings.filter(function(x){return x.tkey===k&&x.type==="V"&&x.team&&x.conf!=="pending"&&!x.subst;})[0];return b?b.team:null;}
-function canEditPres(k){
-  if(S.admin)return true;if(!S.team)return false;
-  return vTeamOf(k)===S.team;
-}
-function canSee(k){
-  if(S.admin)return true;if(!S.team)return false;
-  if(vTeamOf(k)===S.team)return true;
-  return S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending"&&(b.type==="E"||b.subst);});
-}
+function canEditPres(k){return !!(S.admin||S.team);}
+function canSee(k){return !!(S.admin||S.team);}
 
 /* ---------- Vistas ---------- */
 function teamChip(n,mine){
@@ -727,7 +720,7 @@ function vRatings(){
 }
 function vFicha(){
   var k=S.fk,d=S.fdata,f=d.ficha,p=d.prescription;
-  var who=d.role==="key"?"Has entrado con tu clave personal.":(d.role==="admin"?"Acceso de coordinación.":(d.role==="trainer"?"Tu equipo entrena a este profesor: puedes consultar y descargar sus documentos.":"Acceso como equipo que valora a este profesor."));
+  var who=d.role==="key"?"Has entrado con tu clave personal.":(d.role==="admin"?"Acceso de coordinación.":"Acceso como equipo: puedes consultar, descargar y subir documentos de cualquier profesor.");
   var ro=d.role==="trainer";
   var html='<p><button class="btn sm" data-act="fClose">← Volver al profesorado</button></p>'+
     '<p class="eyebrow">Ficha personal</p><h2 style="margin-top:0">'+esc(d.name)+'</h2><p class="muted small">'+who+' Estos datos son privados: no los compartas.</p>';

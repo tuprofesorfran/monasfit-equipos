@@ -580,12 +580,10 @@ async function fichaAccess(req, tkey, admin) {
   }
   const team = int(req.headers.get("x-team"), 1, TEAMS);
   if (team) {
-    const [t, b] = await Promise.all([read("teachers"), read("bookings")]);
-    const rel = edits(tkey, team, t.data, b.data) ? "team" : trains(tkey, team, b.data) ? "trainer" : null;
-    if (rel) {
-      if (await teamAuth(req, team, true)) return rel;
-      fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
-    }
+    /* Cualquier equipo con su clave puede abrir, descargar, subir y borrar en la ficha de cualquier profesor
+       (así otro equipo puede cubrir una valoración o prescripción que no se hizo). */
+    if (await teamAuth(req, team, true)) return "team";
+    fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
   }
   fail("No tienes acceso a esta ficha.");
 }
@@ -875,7 +873,7 @@ export default async (req) => {
       const teamOk = admin || (team ? await teamAuth(req, team, false) : false);
       for (const p of recs) {
         if (!p || !p.tkey) continue;
-        if (admin || (team && teamOk && sees(p.tkey, team, teachers.data, bookings.data))) prescriptions[p.tkey] = p;
+        if (admin || (team && teamOk)) prescriptions[p.tkey] = p;
       }
       const teamKeysSet = {};
       for (const b of (await s.list({ prefix: "teamkeys/" })).blobs) teamKeysSet[b.key.slice(9)] = true;
@@ -963,10 +961,6 @@ export default async (req) => {
       const plan = str(b.plan, 6000).trim();
       if (!plan) return json({ error: "Falta el plan de entrenamiento." }, 400);
       if (!admin) {
-        const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
-        if (!edits(tkey, team, teachers.data, bookings.data)) {
-          return json({ error: "Solo el equipo que valora a este profesor puede escribir su prescripción." }, 403);
-        }
         if (!(await teamAuth(req, team, true))) return json({ error: "La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela." }, 403);
       }
       const rec = {
