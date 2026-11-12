@@ -152,6 +152,15 @@ pre.err{white-space:pre-wrap;margin:.3rem 0 0;font:inherit}
 .tag{display:inline-flex;align-items:center;gap:.3rem;border:1px solid var(--line);border-radius:999px;padding:.1rem .3rem .1rem .65rem;font-size:.84rem;margin:.15rem .25rem .15rem 0}
 .tag button{border:0;background:none;cursor:pointer;font-size:1rem;line-height:1;color:var(--muted);padding:.1rem .35rem}
 @media (prefers-reduced-motion:no-preference){.sess,.card{transition:border-color .15s}}
+.meas{display:grid;grid-template-columns:minmax(0,1fr);gap:.15rem;padding:.55rem 0;border-top:1px solid var(--line)}
+.meas:first-of-type{border-top:0}
+.meas .vals{display:flex;flex-wrap:wrap;gap:.2rem .9rem;font-size:.88rem}
+.meas .vals b{font-weight:600}
+.fkey{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:1.6rem;letter-spacing:.25em;font-weight:600;padding:.4rem .7rem;background:var(--surface);border:1px dashed var(--accent);border-radius:10px;display:inline-block;margin:.3rem 0}
+.keep2{grid-template-columns:1fr 1fr!important}
+.lock{display:inline-block;margin-right:.25rem}
+.tag{display:inline-block;font-size:.72rem;padding:.05rem .45rem;border-radius:999px;background:var(--surface-2);color:var(--muted);margin-left:.4rem}
+.tag.on{background:var(--accent-soft);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -172,7 +181,8 @@ var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   rev:{config:0,teams:0,teachers:0,bookings:0,settings:0},
   name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
-  bulkErr:[],noRestore:false,scrollEditor:false};
+  bulkErr:[],noRestore:false,scrollEditor:false,
+  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false};
 
 var $app=document.getElementById("app");
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -221,10 +231,11 @@ function loadTokens(){try{return JSON.parse(lsGet("monasfit.tokens")||"{}")||{};
 function saveTokens(){lsSet("monasfit.tokens",Object.keys(S.tokens).length?JSON.stringify(S.tokens):"");}
 async function api(path,opts){
   opts=opts||{};
-  var h={"content-type":"application/json"};
+  var h={"content-type":opts.raw?"application/octet-stream":"application/json"};
   if(S.code)h["x-code"]=S.code;
   if(S.adminPass)h["x-admin"]=S.adminPass;
-  var r=await fetch("/api/"+path,{method:opts.method||"GET",headers:h,body:opts.body?JSON.stringify(opts.body):undefined});
+  if(opts.headers)Object.keys(opts.headers).forEach(function(k){h[k]=opts.headers[k];});
+  var r=await fetch("/api/"+path,{method:opts.method||"GET",headers:h,body:opts.raw?opts.raw:(opts.body?JSON.stringify(opts.body):undefined)});
   var data=null;try{data=await r.json();}catch(e){}
   if(!r.ok){var er=new Error((data&&data.error)||("Error "+r.status));er.status=r.status;er.data=data;throw er;}
   return data;
@@ -233,7 +244,7 @@ async function refresh(){
   try{
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
     Object.keys(S.tokens).forEach(function(id){if(!ids[id]){delete S.tokens[id];ch=true;}});if(ch)saveTokens();
@@ -253,7 +264,7 @@ async function saveAll(names){for(var i=0;i<names.length;i++)await saveColl(name
 function newId(){return Math.random().toString(36).slice(2,9)+Date.now().toString(36);}
 function ensureTeacher(name){
   var k=tkeyOf(name);
-  if(!S.teachers[k])S.teachers[k]={tkey:k,name:name.trim(),valTeam:null};
+  if(!S.teachers[k])S.teachers[k]={tkey:k,name:name.trim(),valTeam:null,course:courseNow(),archived:false};
   return k;
 }
 function applyPlan(){
@@ -283,6 +294,23 @@ async function addBookings(items){
   await saveAll(["teachers","bookings","config"].filter(function(n){return dirty[n];}));
   return {added:added,dup:dup,assigned:r.n};
 }
+
+/* ---------- Fichas personales ---------- */
+function courseNow(){var d=new Date(),y=d.getFullYear(),s0=d.getMonth()>=8?y:y-1;return s0+"-"+pad((s0+1)%100);}
+function fHeaders(k){
+  if(S.fpass[k])return {"x-tpass":S.fpass[k]};
+  if(S.team&&!S.admin)return {"x-team":String(S.team)};
+  return {};
+}
+function fSavePass(){ssSet("monasfit.fk",Object.keys(S.fpass).length?JSON.stringify(S.fpass):"");}
+async function loadFicha(k){
+  var r=await api("ficha?tkey="+encodeURIComponent(k),{headers:fHeaders(k)});
+  S.fk=k;S.fdata=r;S.fAsk=null;S.fErr="";S.scrollTop=true;
+}
+function imc(v){return v.peso&&v.talla?(Math.round(v.peso/Math.pow(v.talla/100,2)*10)/10):null;}
+function fmtNum(n,u){return n==null?"—":String(n).replace(".",",")+(u||"");}
+function fmtSize(b){return b>=1048576?(Math.round(b/104857.6)/10)+" MB":Math.max(1,Math.round(b/1024))+" KB";}
+var ENT_FIELDS=[["objetivo","Objetivo principal","Qué quiere conseguir con el proyecto"],["salud","Salud y antecedentes","Enfermedades, medicación, operaciones…"],["lesiones","Lesiones o molestias","Dolor de espalda, rodillas, hombros…"],["actividad","Actividad física actual","Qué hace ahora y con qué frecuencia"],["habitos","Hábitos","Sueño, alimentación, estrés, tabaco…"],["disponibilidad","Disponibilidad y material","Días y horas, gimnasio o casa"],["notas","Otras notas",""]];
 
 /* ---------- Lectura de fechas y franjas ---------- */
 function parseDate(t){
@@ -434,26 +462,114 @@ function vAgenda(){
   });
   return html;
 }
+function fAskForm(k){
+  return '<div class="editor" style="margin-top:.6rem"><label for="fk-in">Tu clave personal</label>'+
+    '<input id="fk-in" data-keep data-k="'+esc(k)+'" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Por ejemplo: K7M2QX">'+
+    (S.fErr?'<div class="note err small">'+esc(S.fErr)+'</div>':'')+
+    '<div class="row" style="margin-top:.6rem"><button class="btn primary" data-act="fLogin" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>Entrar</button><button class="btn" data-act="fAskNo">Cancelar</button></div>'+
+    '<p class="muted small" style="margin-top:.5rem">La clave te la da el coordinador. Si la has perdido, pídele una nueva.</p></div>';
+}
 function vTeachers(){
-  var ks=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
-  var html='<h2 style="margin-top:0">Profesorado</h2>';
-  if(!ks.length)return html+'<div class="card muted">Aún no hay profesorado registrado. Se crea solo al importar las reservas.</div>';
+  if(S.fk&&S.fdata)return vFicha();
+  var ks=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;}).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+  var html='<h2 style="margin-top:0">Profesorado</h2><p class="muted small">Cada profesor entra en su ficha con su clave personal: valoración corporal, prescripción, entrevista y documentos.</p>';
+  if(!ks.length)return html+'<div class="card muted">Aún no hay profesorado registrado. Aparecerá aquí al reservar su primera sesión.</div>';
   ks.forEach(function(k){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
     html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">Valora el equipo '+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+
-      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+' · '+(p?'prescripción guardada':'sin prescripción')+'</p>';
+      '<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
-      var btns="";
-      if(p&&canSee(k))btns+='<button class="btn sm" data-act="toggle" data-id="p-'+esc(k)+'">'+(S.open["p-"+k]?"Ocultar":"Ver")+' prescripción</button>';
+      var btns='<button class="btn sm primary" data-act="openFicha" data-k="'+esc(k)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha</button>';
+      if(p&&canSee(k))btns+=' <button class="btn sm" data-act="toggle" data-id="p-'+esc(k)+'">'+(S.open["p-"+k]?"Ocultar":"Ver")+' prescripción</button>';
       if(canEditPres(k))btns+=' <button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar":"Escribir")+' prescripción</button>';
-      if(btns)html+='<div class="pr-row">'+btns+'</div>';
+      html+='<div class="pr-row">'+btns+'</div>';
+      if(S.fAsk===k)html+=fAskForm(k);
       if(p&&canSee(k)&&S.open["p-"+k])html+=presView(p);
     }
     html+='</div>';
   });
   return html;
+}
+function vFicha(){
+  var k=S.fk,d=S.fdata,f=d.ficha,p=d.prescription;
+  var who=d.role==="key"?"Has entrado con tu clave personal.":(d.role==="admin"?"Acceso de coordinación.":"Acceso como equipo que valora a este profesor.");
+  var html='<p><button class="btn sm" data-act="fClose">← Volver al profesorado</button></p>'+
+    '<p class="eyebrow">Ficha personal</p><h2 style="margin-top:0">'+esc(d.name)+'</h2><p class="muted small">'+who+' Estos datos son privados: no los compartas.</p>';
+
+  // Valoración corporal
+  var vals=(f.valoraciones||[]).slice().sort(function(a,b){return String(b.date).localeCompare(String(a.date));});
+  html+='<div class="card"><h3>Valoración corporal</h3>';
+  if(!vals.length)html+='<p class="muted small">Todavía no hay mediciones.</p>';
+  vals.forEach(function(v){
+    var im=imc(v);
+    html+='<div class="meas"><div class="row" style="justify-content:space-between"><strong>'+(v.date?esc(fmtDate(v.date)):"Sin fecha")+'</strong>'+
+      (S.confirmVal===v.id?'<span><button class="btn sm danger" data-act="fDelValYes" data-id="'+esc(v.id)+'">Borrar</button> <button class="btn sm" data-act="fDelValNo">No</button></span>':'<button class="btn sm" data-act="fDelVal" data-id="'+esc(v.id)+'" aria-label="Borrar medición">Borrar</button>')+'</div>'+
+      '<div class="vals"><span>Peso <b>'+fmtNum(v.peso," kg")+'</b></span><span>Talla <b>'+fmtNum(v.talla," cm")+'</b></span><span>IMC <b>'+fmtNum(im)+'</b></span><span>Grasa <b>'+fmtNum(v.grasa," %")+'</b></span><span>Músculo <b>'+fmtNum(v.musculo," %")+'</b></span><span>Cintura <b>'+fmtNum(v.cintura," cm")+'</b></span></div>'+
+      (v.notas?'<div class="small muted">'+esc(v.notas)+'</div>':'')+'</div>';
+  });
+  html+='<h4 style="margin:1rem 0 .3rem">Añadir una medición</h4><div class="grid2">'+
+    '<div><label for="fv-date">Fecha</label><input id="fv-date" data-keep type="date" value="'+todayStr()+'"></div>'+
+    '<div><label for="fv-peso">Peso (kg)</label><input id="fv-peso" data-keep inputmode="decimal" autocomplete="off"></div>'+
+    '<div><label for="fv-talla">Talla (cm)</label><input id="fv-talla" data-keep inputmode="decimal" autocomplete="off"></div>'+
+    '<div><label for="fv-grasa">Grasa corporal (%)</label><input id="fv-grasa" data-keep inputmode="decimal" autocomplete="off"></div>'+
+    '<div><label for="fv-musculo">Masa muscular (%)</label><input id="fv-musculo" data-keep inputmode="decimal" autocomplete="off"></div>'+
+    '<div><label for="fv-cintura">Cintura (cm)</label><input id="fv-cintura" data-keep inputmode="decimal" autocomplete="off"></div></div>'+
+    '<label for="fv-notas">Observaciones</label><input id="fv-notas" data-keep autocomplete="off" placeholder="Dispositivo usado, condiciones de la medición…">'+
+    '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="fAddVal"'+(S.busy?" disabled":"")+'>Guardar medición</button></div></div>';
+
+  // Prescripción
+  html+='<div class="card"><h3>Prescripción de entrenamiento</h3>';
+  if(S.editing===k&&canEditPres(k))html+=presEditor(k);
+  else{
+    html+=p?presView(p):'<p class="muted small">Todavía no hay prescripción. La escribe el equipo que te valora.</p>';
+    if(canEditPres(k))html+='<div class="pr-row"><button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar":"Escribir")+' prescripción</button></div>';
+  }
+  html+='</div>';
+
+  // Entrevista
+  var e=f.entrevista||{};
+  html+='<div class="card"><h3>Entrevista</h3>'+ENT_FIELDS.map(function(x){
+    return '<label for="fe-'+x[0]+'">'+x[1]+'</label><textarea id="fe-'+x[0]+'" data-keep rows="2" placeholder="'+esc(x[2])+'">'+esc(e[x[0]]||"")+'</textarea>';
+  }).join("")+'<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="fSaveEnt"'+(S.busy?" disabled":"")+'>Guardar entrevista</button></div></div>';
+
+  // Documentos
+  html+='<div class="card"><h3>Documentos</h3>';
+  if(!(f.docs||[]).length)html+='<p class="muted small">No hay documentos.</p>';
+  (f.docs||[]).forEach(function(x){
+    html+='<div class="list-row"><div class="what"><strong>'+esc(x.name)+'</strong><div class="small muted">'+fmtSize(x.size)+' · '+esc(fmtShort(x.at))+'</div></div><div class="row">'+
+      '<button class="btn sm" data-act="fDown" data-id="'+esc(x.id)+'">Descargar</button>'+
+      (S.confirmDoc===x.id?'<button class="btn sm danger" data-act="fDelDocYes" data-id="'+esc(x.id)+'">Borrar</button><button class="btn sm" data-act="fDelDocNo">No</button>':'<button class="btn sm" data-act="fDelDoc" data-id="'+esc(x.id)+'">Borrar</button>')+'</div></div>';
+  });
+  html+='<label for="fdoc" style="margin-top:.8rem">Subir un documento</label><input id="fdoc" type="file" data-change="fdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx">'+
+    '<p class="muted small">PDF, imagen, txt, Word o Excel. Máximo 4 MB cada uno.</p></div>';
+  if(d.role==="key")html+='<div class="row" style="margin:1rem 0"><button class="btn" data-act="fLogout">Cerrar mi ficha en este dispositivo</button></div>';
+  return html;
+}
+function vAdminTeachers(){
+  var cur=courseNow();
+  var all=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+  var act=all.filter(function(k){return !S.teachers[k].archived;}),arch=all.length-act.length;
+  var old=act.filter(function(k){return (S.teachers[k].course||"")!==cur;}).length;
+  var html='<div class="card"><h3>Profesorado y claves</h3><p class="muted small">Cada profesor entra en su ficha (Profesorado → Abrir ficha) con su clave. Genérala aquí y entrégasela. Curso actual: <strong>'+cur+'</strong>.</p>';
+  if(S.fnew)html+='<div class="note ok"><strong>Clave de '+esc((S.teachers[S.fnew.tkey]||{}).name||S.fnew.tkey)+'</strong><br><span class="fkey">'+esc(S.fnew.key)+'</span><br><span class="small">Anótala ahora: no se puede volver a ver (si se pierde, genera otra). La anterior deja de valer.</span> <button class="btn sm" data-act="fNewOk">Ya la he anotado</button></div>';
+  html+='<div class="grid2"><div><label for="nt-name">Añadir profesor</label><input id="nt-name" data-keep autocomplete="off" placeholder="Nombre y apellido"></div>'+
+    '<div><label for="nt-course">Curso</label><input id="nt-course" data-keep autocomplete="off" value="'+cur+'"></div></div>'+
+    '<div class="row" style="margin:.6rem 0"><button class="btn primary" data-act="addTeacher"'+(S.busy?" disabled":"")+'>Añadir al profesorado</button>'+
+    (old?'<button class="btn" data-act="archiveOld"'+(S.busy?" disabled":"")+'>Archivar los de cursos anteriores ('+old+')</button>':'')+'</div>';
+  var list=all.filter(function(k){return S.showArch||!S.teachers[k].archived;});
+  list.forEach(function(k){
+    var t=S.teachers[k],has=!!S.keys[k];
+    html+='<div class="list-row"><div class="what"><strong>'+esc(t.name)+'</strong>'+(t.archived?'<span class="tag">Archivado</span>':'')+'<span class="tag'+(has?' on':'')+'">'+(has?"Con clave":"Sin clave")+'</span>'+
+      '<div class="row" style="margin-top:.3rem"><label class="small muted" for="tc-'+esc(k)+'" style="margin:0">Curso</label><input id="tc-'+esc(k)+'" data-change="tCourse" data-k="'+esc(k)+'" value="'+esc(t.course||"")+'" style="width:6.5rem" autocomplete="off"></div></div>'+
+      '<div class="row" style="justify-content:flex-end">'+
+      (S.confirmKey===k?'<button class="btn sm danger" data-act="genKeyYes" data-k="'+esc(k)+'">Sí, nueva clave</button><button class="btn sm" data-act="genKeyNo">No</button>':
+        '<button class="btn sm" data-act="genKey" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>'+(has?"Nueva clave":"Generar clave")+'</button>')+
+      '<button class="btn sm" data-act="tArch" data-k="'+esc(k)+'">'+(t.archived?"Restaurar":"Archivar")+'</button></div></div>';
+  });
+  if(arch)html+='<div class="row" style="margin-top:.6rem"><button class="btn sm" data-act="togArch">'+(S.showArch?"Ocultar archivados":"Ver archivados ("+arch+")")+'</button></div>';
+  return html+'</div>';
 }
 function teamOptions(sel,withNone){
   var o=withNone?'<option value="">Sin asignar</option>':"";
@@ -492,6 +608,7 @@ function vAdmin(){
   html+='<div class="card"><h3>Equipos</h3><div class="members" style="margin-top:.6rem">'+rows+'</div>'+
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="saveTeams"'+(S.busy?" disabled":"")+'>Guardar equipos</button></div></div>';
 
+  html+=vAdminTeachers();
   var ks=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
   if(ks.length){
     html+='<div class="card"><h3>Equipo de valoración de cada profesor</h3><p class="muted small">Se fija con la primera valoración. Cámbialo aquí si hace falta.</p>';
@@ -726,7 +843,7 @@ var actions={
     var k=d.k,t=S.teachers[k]||{name:k},plan=val("pe-plan").trim();
     if(!plan){say("Escribe el plan de entrenamiento antes de guardar.","err");render();return;}
     var rec={tkey:k,teacher:t.name,team:S.team||vTeamOf(k)||null,goal:val("pe-goal").trim(),days:Number(val("pe-days"))||3,plan:plan,notes:val("pe-notes").trim()};
-    run(async function(){var r=await api("prescription",{method:"POST",body:rec});S.prescriptions[k]=r;S.editing=null;S.noRestore=true;},"Prescripción guardada.");
+    run(async function(){var r=await api("prescription",{method:"POST",body:rec});S.prescriptions[k]=r;if(S.fdata&&S.fk===k)S.fdata.prescription=r;S.editing=null;S.noRestore=true;},"Prescripción guardada.");
   },
   login:function(){
     var p=val("adm-pass");if(!p)return;
@@ -814,6 +931,80 @@ var actions={
     var v={cap:sd.cap,open:sd.open,resp:resp,closed:sd.closed,horizon:sd.horizon};
     run(async function(){S.settings=v;await saveColl("settings");S.sd=null;},"Disponibilidad guardada.");
   },
+  openFicha:function(d){
+    var k=d.k;
+    if(S.admin||(S.team&&canEditPres(k))||S.fpass[k]){run(function(){return loadFicha(k);},"").then(function(){if(S.fpass[k]&&!S.fk){delete S.fpass[k];fSavePass();S.fAsk=k;render();}});}
+    else{S.fAsk=k;S.fErr="";render();setTimeout(function(){var i=document.getElementById("fk-in");if(i)i.focus();},0);}
+  },
+  fAskNo:function(){S.fAsk=null;S.fErr="";render();},
+  fLogin:function(d){
+    var k=d.k,key=val("fk-in").trim();
+    if(!key){S.fErr="Escribe tu clave.";render();return;}
+    S.busy=true;S.fErr="";render();
+    S.fpass[k]=key;
+    loadFicha(k).then(function(){fSavePass();S.noRestore=true;},function(e){delete S.fpass[k];S.fErr=e.message||"No se pudo entrar.";}).then(function(){S.busy=false;render();});
+  },
+  fClose:function(){S.fk=null;S.fdata=null;S.editing=null;S.scrollTop=true;render();},
+  fLogout:function(){var k=S.fk;delete S.fpass[k];fSavePass();S.fk=null;S.fdata=null;S.scrollTop=true;render();},
+  fAddVal:function(){
+    var k=S.fk,v={id:newId().slice(0,10),date:val("fv-date"),peso:val("fv-peso"),talla:val("fv-talla"),grasa:val("fv-grasa"),musculo:val("fv-musculo"),cintura:val("fv-cintura"),notas:val("fv-notas")};
+    if(!v.peso&&!v.talla&&!v.grasa&&!v.musculo&&!v.cintura){say("Escribe al menos un dato de la medición.","err");render();return;}
+    var list=(S.fdata.ficha.valoraciones||[]).concat([v]);
+    run(async function(){var r=await api("ficha",{method:"POST",headers:fHeaders(k),body:{tkey:k,valoraciones:list,entrevista:S.fdata.ficha.entrevista}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Medición guardada.");
+  },
+  fDelVal:function(d){S.confirmVal=d.id;render();},
+  fDelValNo:function(){S.confirmVal=null;render();},
+  fDelValYes:function(d){
+    var k=S.fk,list=(S.fdata.ficha.valoraciones||[]).filter(function(x){return x.id!==d.id;});
+    S.confirmVal=null;
+    run(async function(){var r=await api("ficha",{method:"POST",headers:fHeaders(k),body:{tkey:k,valoraciones:list,entrevista:S.fdata.ficha.entrevista}});S.fdata.ficha=r.ficha;},"Medición borrada.");
+  },
+  fSaveEnt:function(){
+    var k=S.fk,e={};ENT_FIELDS.forEach(function(x){e[x[0]]=val("fe-"+x[0]);});
+    run(async function(){var r=await api("ficha",{method:"POST",headers:fHeaders(k),body:{tkey:k,valoraciones:S.fdata.ficha.valoraciones,entrevista:e}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Entrevista guardada.");
+  },
+  fDown:function(d){
+    var k=S.fk,doc=(S.fdata.ficha.docs||[]).filter(function(x){return x.id===d.id;})[0];if(!doc)return;
+    var h={};Object.assign(h,fHeaders(k));if(S.code)h["x-code"]=S.code;if(S.adminPass)h["x-admin"]=S.adminPass;
+    fetch("/api/doc?tkey="+encodeURIComponent(k)+"&id="+encodeURIComponent(d.id),{headers:h}).then(function(r){
+      if(!r.ok)return r.json().then(function(j){throw new Error((j&&j.error)||"No se pudo descargar.");});
+      return r.blob();
+    }).then(function(b){
+      var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=doc.name;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);
+    }).catch(function(e){say(e.message||"No se pudo descargar.","err");render();});
+  },
+  fDelDoc:function(d){S.confirmDoc=d.id;render();},
+  fDelDocNo:function(){S.confirmDoc=null;render();},
+  fDelDocYes:function(d){
+    var k=S.fk;S.confirmDoc=null;
+    run(async function(){var r=await api("doc-delete",{method:"POST",headers:fHeaders(k),body:{tkey:k,id:d.id}});S.fdata.ficha=r.ficha;},"Documento borrado.");
+  },
+  genKey:function(d){
+    if(S.keys[d.k]){S.confirmKey=d.k;render();return;}
+    actions.genKeyYes(d);
+  },
+  genKeyNo:function(){S.confirmKey=null;render();},
+  genKeyYes:function(d){
+    S.confirmKey=null;
+    run(async function(){var r=await api("ficha-key",{method:"POST",body:{tkey:d.k}});S.keys[d.k]=true;S.fnew={tkey:d.k,key:r.key};},"");
+  },
+  fNewOk:function(){S.fnew=null;render();},
+  togArch:function(){S.showArch=!S.showArch;render();},
+  addTeacher:function(){
+    var nm=val("nt-name").trim().replace(/\s+/g," "),co=val("nt-course").trim()||courseNow();
+    if(nm.length<2){say("Escribe el nombre del profesor.","err");render();return;}
+    run(async function(){
+      var k=ensureTeacher(nm);S.teachers[k].course=co;S.teachers[k].archived=false;
+      await saveColl("teachers");S.noRestore=true;
+    },"Profesor añadido.");
+  },
+  tArch:function(d){
+    run(async function(){var t=S.teachers[d.k];if(t){t.archived=!t.archived;if(!t.archived&&!t.course)t.course=courseNow();}await saveColl("teachers");},"Profesorado actualizado.");
+  },
+  archiveOld:function(){
+    var cur=courseNow(),n=0;
+    run(async function(){Object.keys(S.teachers).forEach(function(k){var t=S.teachers[k];if(!t.archived&&(t.course||"")!==cur){t.archived=true;n++;}});await saveColl("teachers");return n;},function(c){return c+" profesor"+(c===1?"":"es")+" archivado"+(c===1?"":"s")+".";});
+  },
   del:function(d){S.confirmDel=d.id;render();},
   delNo:function(){S.confirmDel=null;render();},
   delYes:function(d){
@@ -828,7 +1019,17 @@ var changes={
     var sd=sdGet(),d=el.dataset.d,sl=Number(el.dataset.s),a=(sd.open[d]||[]).filter(function(x){return x!==sl;});
     if(el.checked)a.push(sl);a.sort(function(x,y){return x-y;});sd.open[d]=a;render();
   },
-  team:function(el){setTeam(el.value?Number(el.value):null);render();refresh().then(render);},
+  team:function(el){setTeam(el.value?Number(el.value):null);if(S.fdata&&S.fdata.role==="team"){S.fk=null;S.fdata=null;}render();refresh().then(render);},
+  tCourse:function(el){var k=el.dataset.k,v=el.value.trim().slice(0,12);run(async function(){if(S.teachers[k])S.teachers[k].course=v;await saveColl("teachers");},"Curso actualizado.");},
+  fdoc:function(el){
+    var f=el.files&&el.files[0],k=S.fk;if(!f||!k)return;
+    if(f.size>4*1024*1024){el.value="";say("El archivo pesa más de 4 MB.","err");render();return;}
+    run(async function(){
+      var buf=await f.arrayBuffer();
+      var r=await api("doc?tkey="+encodeURIComponent(k)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
+      S.fdata.ficha=r.ficha;S.noRestore=true;
+    },"Documento subido.");
+  },
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
   bteam:function(el){var id=el.dataset.id,t=el.value?Number(el.value):null;run(async function(){var b=S.bookings.filter(function(x){return x.id===id;})[0];if(b)b.team=t;await saveColl("bookings");},"Equipo actualizado.");},
   valTeam:function(el){var k=el.dataset.k,t=el.value?Number(el.value):null;run(async function(){if(S.teachers[k])S.teachers[k].valTeam=t;await saveColl("teachers");},"Equipo de valoración actualizado.");}
@@ -845,6 +1046,7 @@ $app.addEventListener("keydown",function(e){
   if(e.key!=="Enter")return;
   if(e.target.id==="code-in")actions.enterCode();
   else if(e.target.id==="adm-pass")actions.login();
+  else if(e.target.id==="fk-in")actions.fLogin({k:e.target.dataset.k});
 });
 function readHash(){
   var h=(location.hash||"").slice(1);
@@ -856,6 +1058,7 @@ async function init(){
   S.code=lsGet("monasfit.code");S.name=lsGet("monasfit.name");S.tokens=loadTokens();
   var t=lsGet("monasfit.team");if(t)S.team=Number(t)||null;
   S.adminPass=ssGet("monasfit.admin");
+  try{S.fpass=JSON.parse(ssGet("monasfit.fk")||"{}")||{};}catch(e){S.fpass={};}
   readHash();render();
   if(S.adminPass){try{await api("admin-check");S.admin=true;}catch(e){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");}}
   await refresh();

@@ -82,6 +82,14 @@ const addDays = (s, n) => {
   return dt.toISOString().slice(0, 10);
 };
 
+// Curso escolar actual (septiembre a agosto), por ejemplo "2026-27"
+const courseNow = () => {
+  const d = madridNow().date;
+  const y = Number(d.slice(0, 4)), m = Number(d.slice(5, 7));
+  const s0 = m >= 9 ? y : y - 1;
+  return s0 + "-" + String((s0 + 1) % 100).padStart(2, "0");
+};
+
 /* ---------- Almacenamiento y bloqueo ---------- */
 async function read(key) {
   const v = await store().get(key, { type: "json" });
@@ -141,7 +149,7 @@ function cleanTeachers(v) {
   for (const k of keys) {
     if (!/^[a-z0-9-]{1,80}$/.test(k)) continue;
     const t = v[k] || {};
-    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS) };
+    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS), course: str(t.course, 12).trim(), archived: !!t.archived };
   }
   return out;
 }
@@ -249,8 +257,9 @@ async function book(b) {
     if (here.length >= st.cap) fail("Esa franja está completa.");
 
     const tdata = { ...teachers.data };
-    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null };
+    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false };
     let teachersDirty = !tdata[tk];
+    if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
     const priorV = list.find((x) => x.tkey === tk && x.type === "V" && x.team);
     if (!t.valTeam && priorV) { t.valTeam = priorV.team; teachersDirty = true; }
     if (type === "V" && t.valTeam && here.some((x) => x.team === t.valTeam))
@@ -304,6 +313,164 @@ async function cancel(b) {
   });
 }
 
+/* ---------- Fichas personales del profesorado (clave propia) ---------- */
+const KEY_ALPHA = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // sin I, L, O, 0, 1 para no confundir
+const newKey = () => { let k = ""; for (const x of randomBytes(6)) k += KEY_ALPHA[x % KEY_ALPHA.length]; return k; };
+const normKey = (s) => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+const keyHash = (salt, k) => createHash("sha256").update(salt + ":" + normKey(k)).digest("hex");
+const TKEY_RE = /^[a-z0-9-]{1,80}$/;
+const MAX_DOC = 4 * 1024 * 1024;
+const DOC_TYPES = {
+  pdf: "application/pdf", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", webp: "image/webp",
+  txt: "text/plain; charset=utf-8", docx: "application/octet-stream", xlsx: "application/octet-stream",
+};
+
+// Devuelve "admin", "key" (clave del profesor) o "team" (equipo que lo valora). Si no, lanza error.
+async function fichaAccess(req, tkey, admin) {
+  if (!TKEY_RE.test(tkey || "")) fail("Profesor no válido.");
+  if (admin) return "admin";
+  const kp = req.headers.get("x-tpass");
+  if (kp) {
+    const s = store();
+    const now = Date.now();
+    const at = await s.get("att/" + tkey, { type: "json" });
+    if (at && at.until > now) fail("Demasiados intentos. Espera unos minutos y vuelve a probar.");
+    const rec = await s.get("keys/" + tkey, { type: "json" });
+    if (!rec) fail("Este profesor aún no tiene clave. Pídesela al coordinador.");
+    const a = Buffer.from(rec.h), b = Buffer.from(keyHash(rec.s, kp));
+    if (a.length === b.length && timingSafeEqual(a, b)) {
+      if (at) { try { await s.delete("att/" + tkey); } catch {} }
+      return "key";
+    }
+    const n = ((at && at.n) || 0) + 1;
+    await s.setJSON("att/" + tkey, n >= 5 ? { n: 0, until: now + 15 * 60000 } : { n, until: 0 });
+    fail(n >= 5 ? "Demasiados intentos. Espera 15 minutos." : "Clave incorrecta.");
+  }
+  const team = int(req.headers.get("x-team"), 1, TEAMS);
+  if (team) {
+    const [t, b] = await Promise.all([read("teachers"), read("bookings")]);
+    if (edits(tkey, team, t.data, b.data)) return "team";
+  }
+  fail("No tienes acceso a esta ficha.");
+}
+
+const EMPTY_FICHA = () => ({ valoraciones: [], entrevista: {}, docs: [], updatedAt: 0 });
+const readFicha = async (tkey) => {
+  const f = await store().get("ficha/" + tkey, { type: "json" });
+  return { ...EMPTY_FICHA(), ...(f || {}), tkey };
+};
+const num = (v, a, b) => {
+  if (v === "" || v == null) return null;
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) && n >= a && n <= b ? Math.round(n * 10) / 10 : null;
+};
+const ENTREVISTA = ["objetivo", "salud", "lesiones", "actividad", "habitos", "disponibilidad", "notas"];
+function cleanValoraciones(v) {
+  if (!Array.isArray(v)) return null;
+  return v.slice(0, 60).map((x) => ({
+    id: str(x && x.id, 20) || randomBytes(4).toString("hex"),
+    date: x && validDate(str(x.date, 10)) ? x.date : "",
+    peso: num(x && x.peso, 20, 300),
+    talla: num(x && x.talla, 100, 230),
+    grasa: num(x && x.grasa, 1, 70),
+    musculo: num(x && x.musculo, 10, 80),
+    cintura: num(x && x.cintura, 40, 200),
+    notas: str(x && x.notas, 600).trim(),
+  }));
+}
+function cleanEntrevista(v) {
+  const out = {};
+  const src = v && typeof v === "object" ? v : {};
+  for (const k of ENTREVISTA) out[k] = str(src[k], 1500).trim();
+  return out;
+}
+
+async function readJson(req) { try { return await req.json(); } catch { fail("Petición no válida."); } }
+
+async function fichaRoutes(route, req, url, admin) {
+  const q = (n) => str(url.searchParams.get(n), 120);
+  if (route === "ficha-key" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador puede generar claves.");
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80);
+    if (!TKEY_RE.test(tkey)) fail("Profesor no válido.");
+    const key = newKey();
+    const salt = randomBytes(8).toString("hex");
+    await store().setJSON("keys/" + tkey, { s: salt, h: keyHash(salt, key), at: Date.now() });
+    try { await store().delete("att/" + tkey); } catch {}
+    return json({ ok: true, key });
+  }
+  if (route === "ficha" && req.method === "GET") {
+    const tkey = q("tkey");
+    const role = await fichaAccess(req, tkey, admin);
+    const [ficha, presc, teachers] = await Promise.all([readFicha(tkey), store().get("prescriptions/" + tkey, { type: "json" }), read("teachers")]);
+    const t = teachers.data[tkey];
+    return json({ role, name: (t && t.name) || tkey, ficha, prescription: presc || null });
+  }
+  if (route === "ficha" && req.method === "POST") {
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80);
+    const role = await fichaAccess(req, tkey, admin);
+    const val = cleanValoraciones(b.valoraciones), ent = cleanEntrevista(b.entrevista);
+    if (!val) fail("Datos no válidos.");
+    return withLock(async () => {
+      const old = await readFicha(tkey);
+      const rec = { ...old, valoraciones: val, entrevista: ent, updatedAt: Date.now(), updatedBy: role };
+      await store().setJSON("ficha/" + tkey, rec);
+      return json({ role, ficha: rec });
+    });
+  }
+  if (route === "doc" && req.method === "POST") {
+    const tkey = q("tkey");
+    const role = await fichaAccess(req, tkey, admin);
+    const name = q("name").replace(/[\\/:*?"<>|\x00-\x1f]+/g, "_").trim() || "documento";
+    const ext = (name.split(".").pop() || "").toLowerCase();
+    if (!DOC_TYPES[ext]) fail("Formato no permitido. Sube PDF, imagen (png, jpg, webp), txt, docx o xlsx.");
+    const buf = await req.arrayBuffer();
+    if (!buf.byteLength) fail("El archivo está vacío.");
+    if (buf.byteLength > MAX_DOC) fail("El archivo pesa más de 4 MB.");
+    return withLock(async () => {
+      const old = await readFicha(tkey);
+      if (old.docs.length >= 30) fail("Ya hay 30 documentos. Borra alguno antes de subir otro.");
+      const id = randomBytes(6).toString("hex");
+      await store().set("docs/" + tkey + "/" + id, buf);
+      const rec = { ...old, docs: [...old.docs, { id, name, ext, size: buf.byteLength, at: Date.now(), by: role }], updatedAt: Date.now() };
+      await store().setJSON("ficha/" + tkey, rec);
+      return json({ role, ficha: rec });
+    });
+  }
+  if (route === "doc" && req.method === "GET") {
+    const tkey = q("tkey"), id = q("id");
+    await fichaAccess(req, tkey, admin);
+    const f = await readFicha(tkey);
+    const d = f.docs.find((x) => x.id === id);
+    if (!d) fail("Ese documento ya no existe.");
+    const buf = await store().get("docs/" + tkey + "/" + id, { type: "arrayBuffer" });
+    if (!buf) fail("Ese documento ya no existe.");
+    return new Response(buf, {
+      headers: {
+        "content-type": DOC_TYPES[d.ext] || "application/octet-stream",
+        "content-disposition": "attachment; filename*=UTF-8''" + encodeURIComponent(d.name),
+        "x-content-type-options": "nosniff",
+        "cache-control": "no-store",
+      },
+    });
+  }
+  if (route === "doc-delete" && req.method === "POST") {
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80), id = str(b && b.id, 20);
+    await fichaAccess(req, tkey, admin);
+    return withLock(async () => {
+      const old = await readFicha(tkey);
+      const rec = { ...old, docs: old.docs.filter((x) => x.id !== id), updatedAt: Date.now() };
+      await store().setJSON("ficha/" + tkey, rec);
+      try { await store().delete("docs/" + tkey + "/" + id); } catch {}
+      return json({ ficha: rec });
+    });
+  }
+  return null;
+}
+
 /* ---------- Rutas ---------- */
 export default async (req) => {
   const url = new URL(req.url);
@@ -327,7 +494,18 @@ export default async (req) => {
         if (!p || !p.tkey) continue;
         if (admin || (team && sees(p.tkey, team, teachers.data, bookings.data))) prescriptions[p.tkey] = p;
       }
-      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin });
+      let keys;
+      if (admin) {
+        keys = {};
+        const kl = await s.list({ prefix: "keys/" });
+        for (const b of kl.blobs) keys[b.key.slice(5)] = true;
+      }
+      return json({ config: cfg, teams, teachers, bookings, settings, prescriptions, admin, keys });
+    }
+
+    {
+      const fr = await fichaRoutes(route, req, url, admin);
+      if (fr) return fr;
     }
 
     if (route === "book" && req.method === "POST") {

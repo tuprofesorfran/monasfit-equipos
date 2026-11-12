@@ -47,3 +47,9 @@ Arrastrar la carpeta directamente a Netlify no sirve aquí, porque el servidor n
 
 - Solo el equipo que valora a un profesor puede escribir su prescripción, y solo ese equipo y el que lo entrena la ven. Lo comprueba el servidor, aunque el alumnado no tiene contraseña personal.
 - Las reservas y las agendas las ve cualquiera que entre en la app.
+
+## Fichas del profesorado
+
+En **Profesorado → Abrir ficha** cada profesor entra con su clave personal y ve su valoración corporal, la prescripción, la entrevista y sus documentos (PDF o imagen, máximo 4 MB).
+El coordinador crea las claves en **Gestión → Profesorado y claves** (se muestran una sola vez), añade profesores nuevos y archiva a los de cursos anteriores.
+Los datos de las fichas no se ven en el estado público de la app: solo con la clave del profesor, la contraseña de coordinación o desde el equipo que lo valora.
