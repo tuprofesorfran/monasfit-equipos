@@ -861,8 +861,10 @@ async function init(){
   await refresh();
   if(S.admin&&!location.hash)S.tab=S.team?"mi-equipo":"gestion";
   render();
-  function tick(){if(document.hidden||S.busy||S.needCode||!S.loaded)return;refresh().then(render);}
-  setInterval(tick,30000);
+  // Se actualiza solo con la pestaña visible y sin abusar del servidor (cada 2 minutos como mucho).
+  var last=Date.now();
+  function tick(){if(document.hidden||S.busy||S.needCode||!S.loaded||Date.now()-last<60000)return;last=Date.now();refresh().then(render);}
+  setInterval(tick,120000);
   document.addEventListener("visibilitychange",tick);
 }
 init();

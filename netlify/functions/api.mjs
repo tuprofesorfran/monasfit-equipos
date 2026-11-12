@@ -294,6 +294,11 @@ async function cancel(b) {
       const t = teachers.data[bk.tkey];
       if (t && t.valTeam === bk.team) await write("teachers", teachers, { ...teachers.data, [bk.tkey]: { ...t, valTeam: null } });
     }
+    if (bk.type === "E" && bk.team && !rest.some((x) => x.type === "E" && x.createdAt > bk.createdAt)) {
+      // Era el último entrenamiento asignado: el turno vuelve a ese equipo (no se "gasta" la rotación).
+      const cfg = await read("config");
+      await write("config", cfg, { nextTeam: bk.team, updatedAt: Date.now() });
+    }
     await store().delete("tokens/" + id);
     return { ok: true };
   });
