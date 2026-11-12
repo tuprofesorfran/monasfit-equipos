@@ -182,7 +182,7 @@ var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   name:"",btype:"E",tokens:{},lastBook:null,confirmBook:null,confirmCancel:null,weekOff:0,sd:null,scrollTop:false,scrollSel:false,
   editing:null,open:{},filter:"all",showPast:false,confirmDel:null,msg:"",msgKind:"ok",busy:false,
   bulkErr:[],noRestore:false,scrollEditor:false,
-  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false};
+  keys:{},fk:null,fdata:null,fpass:{},fAsk:null,fErr:"",fnew:null,confirmKey:null,confirmDoc:null,confirmVal:null,showArch:false,fall:null,impErr:[]};
 
 var $app=document.getElementById("app");
 function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];});}
@@ -552,12 +552,19 @@ function vAdminTeachers(){
   var all=Object.keys(S.teachers).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
   var act=all.filter(function(k){return !S.teachers[k].archived;}),arch=all.length-act.length;
   var old=act.filter(function(k){return (S.teachers[k].course||"")!==cur;}).length;
+  var nokey=act.filter(function(k){return !S.keys[k];}).length;
   var html='<div class="card"><h3>Profesorado y claves</h3><p class="muted small">Cada profesor entra en su ficha (Profesorado → Abrir ficha) con su clave. Genérala aquí y entrégasela. Curso actual: <strong>'+cur+'</strong>.</p>';
   if(S.fnew)html+='<div class="note ok"><strong>Clave de '+esc((S.teachers[S.fnew.tkey]||{}).name||S.fnew.tkey)+'</strong><br><span class="fkey">'+esc(S.fnew.key)+'</span><br><span class="small">Anótala ahora: no se puede volver a ver (si se pierde, genera otra). La anterior deja de valer.</span> <button class="btn sm" data-act="fNewOk">Ya la he anotado</button></div>';
   html+='<div class="grid2"><div><label for="nt-name">Añadir profesor</label><input id="nt-name" data-keep autocomplete="off" placeholder="Nombre y apellido"></div>'+
     '<div><label for="nt-course">Curso</label><input id="nt-course" data-keep autocomplete="off" value="'+cur+'"></div></div>'+
     '<div class="row" style="margin:.6rem 0"><button class="btn primary" data-act="addTeacher"'+(S.busy?" disabled":"")+'>Añadir al profesorado</button>'+
-    (old?'<button class="btn" data-act="archiveOld"'+(S.busy?" disabled":"")+'>Archivar los de cursos anteriores ('+old+')</button>':'')+'</div>';
+    (old?'<button class="btn" data-act="archiveOld"'+(S.busy?" disabled":"")+'>Archivar los de cursos anteriores ('+old+')</button>':'')+'</div>'+
+    '<label for="nt-bulk">Pegar varios profesores</label><textarea id="nt-bulk" data-keep rows="4" placeholder="Víctor Sepulcre, 1&#10;Paula Serra, 1&#10;Bernardo Benito, 2"></textarea>'+
+    '<p class="muted small">Una persona por línea: el nombre y, separado por una coma, el equipo que la valora (1 a 12, opcional).</p>'+
+    (S.impErr.length?'<div class="note err small">'+S.impErr.map(esc).join("<br>")+'</div>':'')+
+    '<div class="row" style="margin:.4rem 0 .8rem"><button class="btn primary" data-act="importTeachers"'+(S.busy?" disabled":"")+'>Importar profesorado</button>'+
+    (nokey?'<button class="btn" data-act="genKeysAll"'+(S.busy?" disabled":"")+'>Generar claves de los '+nokey+' sin clave</button>':'')+'</div>'+
+    (S.fall?'<div class="note ok"><strong>Claves nuevas</strong><p class="small" style="margin:.3rem 0">Cópialas ahora y repártelas: no se vuelven a mostrar.</p><textarea id="fall-txt" rows="8" readonly style="font-family:ui-monospace,Menlo,monospace">'+esc(S.fall.map(function(x){return x.name+"\t"+x.key;}).join("\n"))+'</textarea><div class="row" style="margin-top:.5rem"><button class="btn sm primary" data-act="fAllCopy">Copiar lista</button><button class="btn sm" data-act="fAllOk">Ya las he copiado</button></div></div>':'');
   var list=all.filter(function(k){return S.showArch||!S.teachers[k].archived;});
   list.forEach(function(k){
     var t=S.teachers[k],has=!!S.keys[k];
@@ -990,6 +997,46 @@ var actions={
   },
   fNewOk:function(){S.fnew=null;render();},
   togArch:function(){S.showArch=!S.showArch;render();},
+  importTeachers:function(){
+    var errs=[],items=[];
+    val("nt-bulk").split(/\r?\n/).forEach(function(line,i){
+      line=line.trim();if(!line)return;
+      var m=/^(.*?)[,;\t]\s*(\d{1,2})?\s*$/.exec(line),nm=line,tm=null;
+      if(m){nm=m[1].trim();if(m[2]){tm=Number(m[2]);if(tm<1||tm>TEAMS){errs.push("Línea "+(i+1)+": el equipo debe ser de 1 a "+TEAMS+".");return;}}}
+      nm=nm.replace(/\s+/g," ");
+      if(nm.length<2){errs.push("Línea "+(i+1)+": falta el nombre.");return;}
+      items.push({name:nm,team:tm});
+    });
+    S.impErr=errs;
+    if(!items.length){say(errs.length?"Revisa las líneas con error.":"Pega al menos un profesor.","err");render();return;}
+    run(async function(){
+      var add=0,upd=0;
+      items.forEach(function(it){
+        var existed=!!S.teachers[tkeyOf(it.name)],k=ensureTeacher(it.name),t=S.teachers[k];
+        if(!t.course)t.course=courseNow();
+        t.archived=false;
+        if(it.team)t.valTeam=it.team;
+        if(existed)upd++;else add++;
+      });
+      await saveColl("teachers");
+      if(!errs.length)S.noRestore=true;
+      return {add:add,upd:upd};
+    },function(r){return r.add+" profesor"+(r.add===1?"":"es")+" añadido"+(r.add===1?"":"s")+(r.upd?" y "+r.upd+" actualizado"+(r.upd===1?"":"s"):"")+".";});
+  },
+  genKeysAll:function(){
+    run(async function(){
+      var list=[],ks=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived&&!S.keys[k];}).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
+      for(var i=0;i<ks.length;i++){var r=await api("ficha-key",{method:"POST",body:{tkey:ks[i]}});S.keys[ks[i]]=true;list.push({name:S.teachers[ks[i]].name,key:r.key});}
+      S.fall=list;return list.length;
+    },function(n){return n+" clave"+(n===1?"":"s")+" generada"+(n===1?"":"s")+".";});
+  },
+  fAllCopy:function(){
+    var ta=document.getElementById("fall-txt");if(!ta)return;
+    var done=function(){say("Lista copiada.","ok");render();};
+    var fb=function(){ta.focus();ta.select();try{document.execCommand("copy");}catch(e){}say("Si no se ha copiado, selecciona el texto y cópialo a mano.","ok");render();};
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(ta.value).then(done,fb);}else fb();
+  },
+  fAllOk:function(){S.fall=null;render();},
   addTeacher:function(){
     var nm=val("nt-name").trim().replace(/\s+/g," "),co=val("nt-course").trim()||courseNow();
     if(nm.length<2){say("Escribe el nombre del profesor.","err");render();return;}
