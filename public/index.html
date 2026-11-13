@@ -18,7 +18,7 @@
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
   --bg:#f3f8fe; --surface:#ffffff; --surface-2:#e9f1fa; --line:#d3e0ee;
-  --fg:#1b2b3c; --muted:#5a6b7d;
+  --fg:#1b2b3c; --muted:#5a6b7d; --field-line:#9db3cc;
   --accent:#2459a8; --accent-soft:#dcebfa; --logo-blue:#2f6fd0; --warm:#f6a65a; --warm-soft:#fde8cf; --warm-ink:#8a4a0c; --accent-ink:#ffffff;
   --sun:#f6a65a; --sun-soft:#fff3c7;
   --val:#a35410; --val-soft:#fde8d2;
@@ -28,7 +28,7 @@
 }
 :root[data-theme="dark"]{
   --bg:#0f1722; --surface:#17212f; --surface-2:#1f2c3d; --line:#2b3b50;
-  --fg:#e8eef6; --muted:#9fb0c4;
+  --fg:#e8eef6; --muted:#9fb0c4; --field-line:#4a617d;
   --accent:#7fb8f0; --accent-soft:#1c3350; --logo-blue:#7fb8f0; --warm:#f5b36b; --warm-soft:#3a2a14; --warm-ink:#f5c690; --accent-ink:#0b1b2c;
   --sun:#f5b36b; --sun-soft:#3a3315;
   --val:#f5b36b; --val-soft:#3a2a14;
@@ -76,7 +76,7 @@ p{margin:.3rem 0}
 main{padding-top:1rem}
 
 input,select,textarea,button{font:inherit;color:inherit}
-input,select,textarea{width:100%;font-size:16px;padding:.55rem .65rem;border:1px solid var(--line);border-radius:8px;background:var(--surface);min-width:0}
+input,select,textarea{width:100%;font-size:16px;padding:.55rem .65rem;border:1.5px solid var(--field-line);border-radius:8px;background:var(--surface);min-width:0}
 textarea{resize:vertical;line-height:1.45}
 label{display:block;font-size:.82rem;font-weight:600;margin:.7rem 0 .25rem}
 select{width:auto;max-width:100%}
@@ -294,6 +294,21 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .brand h1{font-weight:800;font-style:italic;letter-spacing:.01em;font-size:1.95rem;line-height:1;white-space:nowrap}
 .brand h1 .h1b{color:var(--accent,#1f6fd6)}
 @media (max-width:560px){.brand h1{font-size:clamp(1rem,calc((100vw - 208px) / 9.2),1.6rem)}.brandL{min-width:0}}
+.docs-card{border-left:5px solid var(--accent)}
+.doc-row{display:flex;gap:.7rem;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:.65rem .75rem;margin:.55rem 0}
+.doc-row .what{flex:1;min-width:150px}.doc-ic{font-size:1.6rem;line-height:1}
+.upl{margin-top:1.1rem;padding:.9rem;border:2px dashed var(--accent);border-radius:14px;background:var(--accent-soft)}
+.upl .step{display:flex;align-items:center;gap:.5rem;font-weight:700;margin:.2rem 0 .4rem}
+.upl .step b{display:inline-grid;place-items:center;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:.8rem}
+.upl select,.upl input[type=file]{width:100%;background:var(--surface);border:1.5px solid var(--accent)}
+input[type=file]::file-selector-button{background:var(--accent);color:var(--accent-ink);border:0;border-radius:8px;padding:.45rem .85rem;margin-right:.7rem;font-weight:700;cursor:pointer}
+.doc-row{--dc:#7b8494;--dc-rgb:123,132,148;--dc-ink:#fff;background:rgba(var(--dc-rgb),.14);border-color:rgba(var(--dc-rgb),.55);border-left:6px solid var(--dc)}
+.dc-parq{--dc:#e8872a;--dc-rgb:232,135,42;--dc-ink:#2b1a05}
+.dc-valoracion{--dc:#2459a8;--dc-rgb:36,89,168;--dc-ink:#fff}
+.dc-prescripcion{--dc:#f2c230;--dc-rgb:242,194,48;--dc-ink:#2b2205}
+:root[data-theme="dark"] .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
+.dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 </style>
 </head>
 <body>
@@ -691,7 +706,8 @@ function vTeachers(){
   });
   return html;
 }
-var DOC_CATS=[["valoracion","VALORACIÓN CORPORAL"],["parq","PAR-Q"],["prescripcion","PRESCRIPCIÓN"],["otro","OTRO DOCUMENTO"]];
+var DOC_CATS=[["valoracion","COMPOSICIÓN CORPORAL"],["parq","PAR-Q"],["prescripcion","PRESCRIPCIÓN"],["otro","OTRO DOCUMENTO"]];
+function docIcon(x){var n=((x.name||"")+"").toLowerCase();if(/\.pdf$/.test(n))return "📕";if(/\.(png|jpe?g|webp)$/.test(n))return "🖼️";if(/\.docx?$/.test(n))return "📝";if(/\.xlsx?$/.test(n))return "📊";return "📄";}
 function docLabel(c){for(var i=0;i<DOC_CATS.length;i++)if(DOC_CATS[i][0]===c)return DOC_CATS[i][1];return "OTRO DOCUMENTO";}
 function guessCat(n){
   var s=String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
@@ -831,17 +847,17 @@ function vFicha(){
   if(d.role==="key")html+=vRate(d);
 
   // Documentos
-  html+='<div class="card"><h3>Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT.</p>';
+  html+='<div class="card docs-card"><h3>📁 Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT.</p>';
   if(!(f.docs||[]).length)html+='<p class="muted small">No hay documentos.</p>';
   (f.docs||[]).forEach(function(x){
     var dc=docCat(x);
-    html+='<div class="list-row"><div class="what"><strong>'+docLabel(dc)+'</strong><div class="small muted">'+esc(fmtShort(x.at))+' · '+fmtSize(x.size)+'</div>'+
+    html+='<div class="doc-row dc-'+esc(dc)+'"><span class="doc-ic" aria-hidden="true">'+docIcon(x)+'</span><div class="what"><span class="dc-chip">'+docLabel(dc)+'</span><div class="small muted">'+esc(fmtShort(x.at))+' · '+fmtSize(x.size)+'</div>'+
       (ro?"":'<select class="docsel" data-change="docCat" data-id="'+esc(x.id)+'" aria-label="Cambiar el tipo de documento">'+catOpts("",false).replace('<option value="valoracion">','<option value="" selected>Cambiar tipo…</option><option value="valoracion">')+'</select>')+'</div><div class="row">'+
-      '<button class="btn sm" data-act="fDown" data-id="'+esc(x.id)+'">Descargar</button>'+
+      '<button class="btn sm primary" data-act="fDown" data-id="'+esc(x.id)+'">⬇ Descargar</button>'+
       (ro?"":(S.confirmDoc===x.id?'<button class="btn sm danger" data-act="fDelDocYes" data-id="'+esc(x.id)+'">Borrar</button><button class="btn sm" data-act="fDelDocNo">No</button>':'<button class="btn sm" data-act="fDelDoc" data-id="'+esc(x.id)+'">Borrar</button>'))+'</div></div>';
   });
-  if(!ro)html+='<label for="fdoc-cat" style="margin-top:.8rem">Subir un documento</label><select id="fdoc-cat" data-keep>'+catOpts("",true)+'</select><input id="fdoc" style="margin-top:.5rem" type="file" data-change="fdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx">'+
-    '<p class="muted small">PDF, imagen, txt, Word o Excel. Máximo 4 MB cada uno.</p></div>';
+  if(!ro)html+='<div class="upl"><h4 style="margin:0 0 .4rem">⬆ Subir un documento</h4><div class="step"><b>1</b> Elige el tipo de documento</div><select id="fdoc-cat" data-keep>'+catOpts("",true)+'</select><div class="step" style="margin-top:.8rem"><b>2</b> Elige el archivo</div><input id="fdoc" type="file" data-change="fdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx">'+
+    '<p class="muted small" style="margin:.5rem 0 0">PDF, imagen, txt, Word o Excel. Máximo 4 MB cada uno. Se sube al elegir el archivo.</p></div></div>';
   if(d.role==="key")html+='<div class="row" style="margin:1rem 0"><button class="btn" data-act="fLogout">Cerrar mi ficha en este dispositivo</button></div>';
   return html;
 }
