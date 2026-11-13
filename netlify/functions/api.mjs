@@ -999,7 +999,7 @@ const handle = async (req) => {
       const b = await req.json().catch(() => ({}));
       const team = int(b.team, 1, TEAMS);
       if (!team) fail("Elige tu equipo.");
-      if (!(await teamAuth(req, team, true))) fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
+      if (!isAdmin(req) && !(await teamAuth(req, team, true))) fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
       const s = store();
       const cur = (await s.get("push/" + team, { type: "json" })) || [];
       if (route === "push-sub") {

@@ -540,7 +540,7 @@ function pushCheck(){
   navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription();}).then(function(sub){S.pushSub=!!sub&&Notification.permission==="granted";render();}).catch(function(){});
 }
 function pushCard(){
-  if(S.admin||!S.team)return "";
+  if(!S.team)return "";
   var h='<div class="card pushcard"><h3>🔔 Avisos en el móvil</h3>';
   if(!pushSupport()||(isIOS()&&!isStandalone())){
     h+='<p class="small">Para recibir un aviso cuando os asignen una sesión:</p><ol class="small" style="margin:.3rem 0 0 1.1rem;padding:0">'+
