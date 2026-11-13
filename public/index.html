@@ -259,7 +259,7 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .next-t{font-size:1.15rem}.next .btn{width:100%}
 .podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.45rem;align-items:end;margin:.7rem 0 .5rem;text-align:center}
 .pod{display:flex;flex-direction:column;align-items:center;gap:.1rem;min-width:0}
-.pod .pm{font-size:1.7rem;line-height:1}.pod .pn{font-weight:700;font-size:.9rem}.pod .pa{font-size:.85rem;color:var(--warm-ink);font-weight:700}
+.pod .pm{font-size:1.7rem;line-height:1}.pod .pn{font-weight:700;font-size:.9rem}.pod .pa{white-space:nowrap;letter-spacing:-.04em;font-size:.78rem;color:var(--warm-ink);font-weight:700}
 .pod .pb{display:block;width:100%;border-radius:8px 8px 0 0;margin-top:.25rem;background:linear-gradient(180deg,#ffd666,#f6a65a)}
 .pod.p1 .pb{height:68px}.pod.p2 .pb{height:46px;background:linear-gradient(180deg,#e3e8ee,#b9c3cf)}.pod.p3 .pb{height:32px;background:linear-gradient(180deg,#f0b27a,#c9793a)}
 .pod.mine .pn{text-decoration:underline;text-decoration-color:var(--logo-blue);text-decoration-thickness:3px}
@@ -754,13 +754,13 @@ function vRanking(){
   if(!R.length)return html+'<p class="muted small">Todavía no hay valoraciones. En cuanto el profesorado puntúe, aparecerá aquí la clasificación.</p></div>';
   if(R.length>=3){
     var po=[1,0,2];html+='<div class="podium">';
-    po.forEach(function(i){var r=R[i];html+='<div class="pod p'+(i+1)+(S.team===r.team?" mine":"")+'"><span class="pm">'+med[i]+'</span><span class="pn">Equipo '+r.team+'</span><span class="pa">★ '+String(Math.round(r.avg*10)/10).replace(".",",")+'</span><span class="pb"></span></div>';});
+    po.forEach(function(i){var r=R[i];html+='<div class="pod p'+(i+1)+(S.team===r.team?" mine":"")+'"><span class="pm">'+med[i]+'</span><span class="pn">Equipo '+r.team+'</span><span class="pa"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> '+String(Math.round(r.avg*10)/10).replace(".",",")+' <small>('+r.n+')</small></span><span class="pb"></span></div>';});
     html+='</div>';
   }
   R.forEach(function(r,i){
     if(R.length>=3&&i<3)return;
     var mine=S.team===r.team;
-    html+='<div class="rank'+(i<3?" gold":"")+(mine?" mine":"")+'"><span class="pos">'+(i<3?med[i]:(i+1)+'º')+'</span><span class="rn"><strong>Equipo '+r.team+'</strong>'+(membersOf(r.team)?'<span class="muted small"> · '+esc(membersOf(r.team))+'</span>':"")+'</span><span class="rs"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> <strong>'+String(Math.round(r.avg*10)/10).replace(".",",")+'</strong> <span class="muted small">('+r.n+')</span></span>'+rankSub(r)+'</div>';
+    html+='<div class="rank'+(i<3?" gold":"")+(mine?" mine":"")+'"><span class="pos">'+(i<3?med[i]:(i+1)+'º')+'</span><span class="rn"><strong>Equipo '+r.team+'</strong>'+(membersOf(r.team)?'<span class="muted small"> · '+esc(membersOf(r.team))+'</span>':"")+'</span><span class="rs"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> <strong>'+String(Math.round(r.avg*10)/10).replace(".",",")+'</strong> <span class="muted small">('+r.n+')</span></span>'+'</div>';
   });
   var none=[];for(var t=1;t<=TEAMS;t++)if(!R.some(function(r){return r.team===t;}))none.push(t);
   if(none.length)html+='<p class="muted small" style="margin-bottom:0">Aún sin valoraciones: equipo'+(none.length>1?"s ":" ")+none.join(", ")+'.</p>';
