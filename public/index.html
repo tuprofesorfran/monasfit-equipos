@@ -913,12 +913,13 @@ function vAdminTeachers(){
   var list=all.filter(function(k){return S.showArch||!S.teachers[k].archived;});
   list.forEach(function(k){
     var t=S.teachers[k],has=!!S.keys[k];
-    html+='<div class="list-row"><div class="what"><strong>'+esc(t.name)+'</strong>'+(t.archived?'<span class="tag">Archivado</span>':'')+'<span class="tag'+(has?' on':'')+'">'+(has?"Con clave":"Sin clave")+'</span>'+
+    html+='<div class="list-row"><div class="what"><strong>'+esc(t.name)+'</strong>'+(t.archived?'<span class="tag">Archivado</span>':'')+(t.needsVal?'<span class="tag">Prescripción pendiente</span>':'')+'<span class="tag'+(has?' on':'')+'">'+(has?"Con clave":"Sin clave")+'</span>'+
       '<div class="row" style="margin-top:.3rem"><label class="small muted" for="tc-'+esc(k)+'" style="margin:0">Curso</label><input id="tc-'+esc(k)+'" data-change="tCourse" data-k="'+esc(k)+'" value="'+esc(t.course||"")+'" style="width:6.5rem" autocomplete="off"></div>'+
       '<div class="row" style="margin-top:.3rem"><label class="small muted" for="te-'+esc(k)+'" style="margin:0">Correo</label><input id="te-'+esc(k)+'" type="email" data-change="tEmail" data-k="'+esc(k)+'" value="'+esc(emOf[k]||"")+'" placeholder="sin correo" autocapitalize="off" autocomplete="off" style="flex:1;min-width:10rem"></div></div>'+
       '<div class="row" style="justify-content:flex-end">'+
       (S.confirmKey===k?'<button class="btn sm danger" data-act="genKeyYes" data-k="'+esc(k)+'">Sí, nueva clave</button><button class="btn sm" data-act="genKeyNo">No</button>':
         '<button class="btn sm" data-act="genKey" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>'+(has?"Nueva clave":"Generar clave")+'</button>')+
+      (t.needsVal?'<button class="btn sm" data-act="tNoVal" data-k="'+esc(k)+'" title="Quita el bloqueo: podrá reservar entrenamientos sin prescripción subida">Sin bloqueo</button>':'')+
       '<button class="btn sm" data-act="tArch" data-k="'+esc(k)+'">'+(t.archived?"Restaurar":"Archivar")+'</button></div></div>';
   });
   if(arch)html+='<div class="row" style="margin-top:.6rem"><button class="btn sm" data-act="togArch">'+(S.showArch?"Ocultar archivados":"Ver archivados ("+arch+")")+'</button></div>';
@@ -1492,6 +1493,7 @@ var actions={
       S.noRestore=true;
     },"Profesor añadido.");
   },
+  tNoVal:function(d){run(async function(){var t=S.teachers[d.k];if(t)delete t.needsVal;await saveColl("teachers");},"Listo: ya puede reservar entrenamientos.");},
   tArch:function(d){
     run(async function(){var t=S.teachers[d.k];if(t){t.archived=!t.archived;if(!t.archived&&!t.course)t.course=courseNow();}await saveColl("teachers");},"Profesorado actualizado.");
   },
