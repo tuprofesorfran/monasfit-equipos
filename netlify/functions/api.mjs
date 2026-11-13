@@ -3,7 +3,7 @@
 //   ADMIN_PASSWORD  (obligatoria) contraseña del coordinador
 //   ACCESS_CODE     (opcional)    código que debe escribir quien abre la app
 import { getStore } from "@netlify/blobs";
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual, createECDH, createPrivateKey, generateKeyPairSync, hkdfSync, createCipheriv, sign as cSign } from "node:crypto";
 
 export const config = { path: "/api/*" };
 
@@ -113,6 +113,7 @@ async function read(key) {
 async function write(key, cur, data) {
   const rev = cur.rev + 1;
   await store().setJSON(key, { rev, data });
+  if (key === "bookings") { try { queueBookingPushes(cur.data, data); } catch {} }
   return rev;
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -155,6 +156,7 @@ function cleanBookings(v) {
       conf: ["pending", "ok"].includes(b.conf) ? b.conf : undefined,
       dueAt: Number(b.dueAt) || undefined,
       assignedAt: Number(b.assignedAt) || undefined,
+      reminded: b.reminded === true ? true : undefined,
       confirmedAt: Number(b.confirmedAt) || undefined,
       subst: b.subst === true ? true : undefined,
       auto: b.auto === true ? true : undefined,
@@ -271,7 +273,7 @@ function dueFor(b, nowMs) {
 // Marca una asignación hecha por el sistema como "pendiente de confirmar" (o confirmada si ya no hay tiempo de esperar)
 function stampPending(b, nowMs) {
   b.assignedAt = nowMs;
-  delete b.confirmedAt;
+  delete b.confirmedAt; delete b.reminded;
   const due = dueFor(b, nowMs);
   if (due <= nowMs) { b.conf = "ok"; b.auto = true; delete b.dueAt; }
   else { b.conf = "pending"; b.dueAt = Math.round(due); delete b.auto; }
@@ -320,6 +322,27 @@ async function runSweep() {
     await write("config", cfg, { nextTeam: r.ptr, updatedAt: nowMs });
     await write("bookings", bookings, r.all);
   });
+}
+const REMIND_BEFORE_MS = 3 * 3600000; // recordatorio cuando faltan 3 h para el límite
+// Tarea programada: pasa de equipo lo vencido y recuerda confirmar a quien sigue sin hacerlo
+export async function cronJob() {
+  await runSweep();
+  const nowMs = Date.now();
+  const pre = await read("bookings");
+  const due = pre.data.filter((b) => b.conf === "pending" && b.team && b.dueAt && !b.reminded && nowMs >= b.dueAt - REMIND_BEFORE_MS && nowMs < b.dueAt && b.date >= madridNow().date && (!b.assignedAt || b.dueAt - b.assignedAt > REMIND_BEFORE_MS + 3600000));
+  if (due.length) {
+    await withLock(async () => {
+      const cur = await read("bookings");
+      const ids = new Set(due.map((b) => b.id));
+      const mine = cur.data.filter((b) => ids.has(b.id) && b.conf === "pending" && b.team && !b.reminded);
+      if (!mine.length) return;
+      const done = new Set(mine.map((b) => b.id));
+      await write("bookings", cur, cur.data.map((b) => (done.has(b.id) ? { ...b, reminded: true } : b)));
+      for (const b of mine) outbox.push({ team: b.team, msg: { title: "Equipo " + b.team + ": recordatorio, confirmad " + pushWhatKind(b), body: pushWhat(b) + ". Si no confirmáis antes del " + pushDue(b.dueAt) + ", pasará a otro equipo.", tag: "bk-" + b.id, url: "/#mi-equipo" } });
+    });
+  }
+  await flushPush();
+  return { reminded: due.length };
 }
 async function respond(req, b, admin) {
   const id = str(b && b.id, 40);
@@ -839,7 +862,108 @@ async function fichaRoutes(route, req, url, admin) {
 }
 
 /* ---------- Rutas ---------- */
-export default async (req) => {
+
+/* ---------- Avisos al móvil (Web Push, sin librerías) ---------- */
+const b64u = (buf) => Buffer.from(buf).toString("base64url");
+const SLOT_LABEL = [null, "7:55–8:50", "8:50–9:45", "9:45–10:40", "11:10–12:05", "12:05–13:00", "13:00–13:55"];
+const SITE = "https://monasfit-salud.netlify.app";
+async function vapid() {
+  const s = store();
+  let v = await s.get("vapid", { type: "json" });
+  if (!v) {
+    const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+    const jwk = privateKey.export({ format: "jwk" });
+    const pj = publicKey.export({ format: "jwk" });
+    const rec = { priv: jwk, pub: b64u(Buffer.concat([Buffer.from([4]), Buffer.from(pj.x, "base64url"), Buffer.from(pj.y, "base64url")])) };
+    const r = await s.setJSON("vapid", rec, { onlyIfNew: true });
+    v = r && r.modified === false ? await s.get("vapid", { type: "json" }) : rec;
+  }
+  return v;
+}
+function vapidAuth(v, endpoint) {
+  const aud = new URL(endpoint).origin;
+  const head = b64u(JSON.stringify({ typ: "JWT", alg: "ES256" }));
+  const claims = b64u(JSON.stringify({ aud, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: SITE }));
+  const sig = cSign("sha256", Buffer.from(head + "." + claims), { key: createPrivateKey({ key: v.priv, format: "jwk" }), dsaEncoding: "ieee-p1363" });
+  return "vapid t=" + head + "." + claims + "." + b64u(sig) + ", k=" + v.pub;
+}
+// Cifrado del mensaje según RFC 8291 (aes128gcm)
+function encryptPush(sub, payload) {
+  const ua = Buffer.from(sub.keys.p256dh, "base64url"), auth = Buffer.from(sub.keys.auth, "base64url");
+  const ecdh = createECDH("prime256v1"); ecdh.generateKeys();
+  const asPub = ecdh.getPublicKey();
+  const secret = ecdh.computeSecret(ua);
+  const prk = Buffer.from(hkdfSync("sha256", secret, auth, Buffer.concat([Buffer.from("WebPush: info\0"), ua, asPub]), 32));
+  const salt = randomBytes(16);
+  const cek = Buffer.from(hkdfSync("sha256", prk, salt, Buffer.from("Content-Encoding: aes128gcm\0"), 16));
+  const nonce = Buffer.from(hkdfSync("sha256", prk, salt, Buffer.from("Content-Encoding: nonce\0"), 12));
+  const c = createCipheriv("aes-128-gcm", cek, nonce);
+  const ct = Buffer.concat([c.update(Buffer.concat([Buffer.from(payload), Buffer.from([2])])), c.final(), c.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096);
+  return Buffer.concat([salt, rs, Buffer.from([asPub.length]), asPub, ct]);
+}
+async function sendOne(v, sub, msg) {
+  const r = await fetch(sub.endpoint, {
+    method: "POST",
+    headers: { "content-encoding": "aes128gcm", "content-type": "application/octet-stream", ttl: "43200", urgency: "high", authorization: vapidAuth(v, sub.endpoint) },
+    body: encryptPush(sub, JSON.stringify(msg)),
+    signal: AbortSignal.timeout(6000),
+  });
+  return r.status;
+}
+async function pushToTeam(team, msg) {
+  const s = store();
+  const subs = (await s.get("push/" + team, { type: "json" })) || [];
+  if (!subs.length) return { sent: 0, total: 0 };
+  const v = await vapid();
+  const dead = new Set();
+  let sent = 0;
+  await Promise.all(subs.map(async (sub) => {
+    try {
+      const st = await sendOne(v, sub, msg);
+      if (st >= 200 && st < 300) sent++;
+      else if (st === 404 || st === 410) dead.add(sub.endpoint);
+    } catch {}
+  }));
+  if (dead.size) {
+    const cur = (await s.get("push/" + team, { type: "json" })) || [];
+    await s.setJSON("push/" + team, cur.filter((x) => !dead.has(x.endpoint)));
+  }
+  return { sent, total: subs.length };
+}
+const pushDate = (d) => { const [y, m, dd] = d.split("-").map(Number); return new Date(Date.UTC(y, m - 1, dd)).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }); };
+const pushWhat = (b) => (b.teacher || "Profesor") + " · " + (b.type === "V" ? "valoración" : "entrenamiento") + " · " + pushDate(b.date) + ", " + (SLOT_LABEL[b.slot] || "");
+const pushDue = (ms) => new Date(ms).toLocaleString("es-ES", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "Europe/Madrid" }).replace(",", "").replace(/ (\d{2}:\d{2})$/, " a las $1");
+const pushWhatKind = (b) => (b.type === "V" ? "la valoración" : "el entrenamiento");
+let outbox = [];
+function queueBookingPushes(oldList, newList) {
+  const today = madridNow().date;
+  const olds = {}; (oldList || []).forEach((b) => { olds[b.id] = b; });
+  const news = {}; (newList || []).forEach((b) => { news[b.id] = b; });
+  for (const b of newList || []) {
+    if (b.date < today) continue;
+    const o = olds[b.id];
+    if (b.team && (!o || o.team !== b.team)) {
+      outbox.push({ team: b.team, msg: b.conf === "pending"
+        ? { title: "Equipo " + b.team + ": confirmad " + pushWhatKind(b), body: pushWhat(b) + ". Entrad en la app y confirmad si podéis" + (b.dueAt ? " antes del " + pushDue(b.dueAt) : "") + "; si no, pasará a otro equipo.", tag: "bk-" + b.id, url: "/#mi-equipo" }
+        : { title: "Equipo " + b.team + ": nueva sesión", body: pushWhat(b), tag: "bk-" + b.id, url: "/#mi-equipo" } });
+    }
+    if (o && o.team && o.team !== b.team) {
+      const last = (b.declined || []).slice(-1)[0];
+      if (!(last && last.t === o.team && last.why === "no")) outbox.push({ team: o.team, msg: { title: "Equipo " + o.team + ": sesión que pasa a otro equipo", body: pushWhat(b), tag: "bk-" + b.id, url: "/#mi-equipo" } });
+    }
+  }
+  for (const o of oldList || []) {
+    if (o.team && o.date >= today && !news[o.id]) outbox.push({ team: o.team, msg: { title: "Equipo " + o.team + ": sesión cancelada", body: pushWhat(o), tag: "bk-" + o.id, url: "/#mi-equipo" } });
+  }
+}
+async function flushPush() {
+  const items = outbox; outbox = [];
+  if (!items.length) return;
+  await Promise.allSettled(items.map((i) => pushToTeam(i.team, i.msg)));
+}
+
+const handle = async (req) => {
   const url = new URL(req.url);
   const route = url.pathname.replace(/^\/api\/?/, "").replace(/\/$/, "");
   const admin = isAdmin(req);
@@ -868,6 +992,33 @@ export default async (req) => {
       await store().set("logo", buf);
       await store().setJSON("logo.meta", { type, at: Date.now() });
       return json({ ok: true });
+    }
+
+    if (route === "push-key" && req.method === "GET") return json({ key: (await vapid()).pub });
+    if (route.startsWith("push-") && req.method === "POST") {
+      const b = await req.json().catch(() => ({}));
+      const team = int(b.team, 1, TEAMS);
+      if (!team) fail("Elige tu equipo.");
+      if (!(await teamAuth(req, team, true))) fail("La clave de tu equipo no es válida. Vuelve a elegir tu equipo e introdúcela.");
+      const s = store();
+      const cur = (await s.get("push/" + team, { type: "json" })) || [];
+      if (route === "push-sub") {
+        const sub = b.sub || {};
+        const ep = String(sub.endpoint || ""), k = sub.keys || {};
+        if (!(/^https:\/\//.test(ep) || (process.env.PUSH_TEST_HTTP === "1" && /^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(ep))) || ep.length > 600 || !k.p256dh || !k.auth || String(k.p256dh).length > 200 || String(k.auth).length > 100) fail("Este móvil no ha enviado una suscripción válida.");
+        const next = cur.filter((x) => x.endpoint !== ep);
+        next.push({ endpoint: ep, keys: { p256dh: String(k.p256dh), auth: String(k.auth) }, at: Date.now() });
+        await s.setJSON("push/" + team, next.slice(-12));
+        return json({ ok: true });
+      }
+      if (route === "push-unsub") {
+        await s.setJSON("push/" + team, cur.filter((x) => x.endpoint !== String(b.endpoint || "")));
+        return json({ ok: true });
+      }
+      if (route === "push-test") {
+        const r = await pushToTeam(team, { title: "Equipo " + team + ": aviso de prueba", body: "Si ves esto, los avisos funcionan en este móvil.", tag: "test", url: "/#mi-equipo" });
+        return json({ ok: true, ...r });
+      }
     }
 
     if (route === "state" && req.method === "GET") {
@@ -992,4 +1143,9 @@ export default async (req) => {
     console.error(e);
     return json({ error: "Error del servidor." }, 500);
   }
+};
+export default async (req) => {
+  const res = await handle(req);
+  try { await flushPush(); } catch {}
+  return res;
 };
