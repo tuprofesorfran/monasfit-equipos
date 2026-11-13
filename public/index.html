@@ -537,7 +537,7 @@ function dueCardTeam(){
   return c;
 }
 function vTeamOf(k){var t=S.teachers[k];if(t&&t.valTeam)return t.valTeam;var b=S.bookings.filter(function(x){return x.tkey===k&&x.type==="V"&&x.team&&x.conf!=="pending"&&!x.subst;})[0];return b?b.team:null;}
-function canEditPres(k){return !!(S.admin||S.team);}
+function canEditPres(k){return false;}
 function canSee(k){return !!(S.admin||S.team);}
 
 /* ---------- Vistas ---------- */
@@ -585,8 +585,7 @@ function presEditor(k){
 function sessionCard(b){
   var t=S.teachers[b.tkey]||{},p=S.prescriptions[b.tkey],tag=dayTag(b.date),extra="";
   if(b.type==="V"){
-    extra='<div class="pr-row">'+(p?'<span class="ok">Prescripción guardada</span>':'<span class="pending">Prescripción pendiente</span>')+
-      (canEditPres(b.tkey)?' <button class="btn sm" data-act="edit" data-k="'+esc(b.tkey)+'">'+(p?"Editar":"Escribir prescripción")+'</button>':'')+'</div>';
+    extra="";
   }else if(p&&canSee(b.tkey)){
     var open=S.open[b.id];
     extra='<div class="pr-row"><button class="btn sm" data-act="toggle" data-id="'+esc(b.id)+'">'+(open?"Ocultar":"Ver")+' prescripción</button></div>'+(open?presView(p):"");
@@ -631,20 +630,8 @@ function vMine(){
   html+='<h2>Próximas sesiones</h2>';
   if(!up.length)html+='<div class="card muted">Todavía no tienes sesiones confirmadas. Aparecerán aquí cuando el profesorado reserve y las confirméis.</div>';
   groupByDate(up).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
-  var keys={};
-  S.bookings.forEach(function(b){if(b.type==="V"&&b.team===S.team&&b.conf!=="pending"&&!b.subst)keys[b.tkey]=1;});
-  Object.keys(S.teachers).forEach(function(k){if(S.teachers[k].valTeam===S.team)keys[k]=1;});
-  var ks=Object.keys(keys).sort(function(a,b){return (S.teachers[a]?S.teachers[a].name:a).localeCompare(S.teachers[b]?S.teachers[b].name:b,"es");});
-  if(ks.length){
-    html+='<h2>Prescripciones a tu cargo</h2><p class="muted small">Estos profesores los valora siempre tu equipo. Su prescripción la ve después el equipo que los entrene.</p>';
-    ks.forEach(function(k){
-      var t=S.teachers[k]||{name:k},p=S.prescriptions[k];
-      html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(p?'<span class="ok">Guardada · '+fmtShort(p.updatedAt||Date.now())+'</span>':'<span class="pending">Pendiente</span>')+'</div>';
-      if(S.editing===k)html+=presEditor(k);
-      else html+='<div class="pr-row"><button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar prescripción":"Escribir prescripción")+'</button></div>'+(p?presView(p):"");
-      html+='</div>';
-    });
-  }
+  var ks=[];
+  Object.keys(S.teachers).forEach(function(k){if(S.teachers[k].valTeam===S.team||S.bookings.some(function(b){return b.tkey===k&&b.type==="V"&&b.team===S.team&&b.conf!=="pending"&&!b.subst;}))ks.push(k);});
   (function(){
     var all=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;});
     if(!all.length)return;
@@ -843,14 +830,8 @@ function vFicha(){
     '<label for="fv-notas">Observaciones</label><input id="fv-notas" data-keep autocomplete="off" placeholder="Dispositivo usado, condiciones de la medición…">'+
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="fAddVal"'+(S.busy?" disabled":"")+'>Guardar medición</button></div></div>';
 
-  // Prescripción
-  html+='<div class="card"><h3>Prescripción de entrenamiento</h3>';
-  if(S.editing===k&&canEditPres(k))html+=presEditor(k);
-  else{
-    html+=p?presView(p):'<p class="muted small">Todavía no hay prescripción. La escribe el equipo que te valora.</p>';
-    if(canEditPres(k))html+='<div class="pr-row"><button class="btn sm" data-act="edit" data-k="'+esc(k)+'">'+(p?"Editar":"Escribir")+' prescripción</button></div>';
-  }
-  html+='</div>';
+  // Prescripción escrita antigua (solo lectura; ahora la prescripción se sube como documento)
+  if(p)html+='<div class="card"><h3>Prescripción de entrenamiento</h3>'+presView(p)+'</div>';
 
   // Entrevista
   var e=f.entrevista||{};

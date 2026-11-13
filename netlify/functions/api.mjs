@@ -466,7 +466,9 @@ async function book(b) {
     // Profesor nuevo: primero valoración y prescripción; hasta entonces no puede reservar entrenamiento guiado.
     if (type === "E" && t.needsVal) {
       const pr = await store().get("prescriptions/" + tk, { type: "json" });
-      if (!pr) fail("Como es tu primera vez en el proyecto, primero te hacemos la valoración y el equipo te prepara la prescripción. Reserva una valoración; cuando tu prescripción esté lista podrás reservar entrenamientos.");
+      const fi = pr ? null : await readFicha(tk);
+      const hasPresDoc = !!(fi && (fi.docs || []).some((d) => d.cat === "prescripcion"));
+      if (!pr && !hasPresDoc) fail("Como es tu primera vez en el proyecto, primero te hacemos la valoración y el equipo te prepara la prescripción. Reserva una valoración; cuando tu prescripción esté lista podrás reservar entrenamientos.");
       delete t.needsVal; teachersDirty = true;
     }
     const priorV = list.find((x) => x.tkey === tk && x.type === "V" && x.team && x.conf !== "pending" && !x.subst);
