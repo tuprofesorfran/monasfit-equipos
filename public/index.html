@@ -73,6 +73,7 @@ p{margin:.3rem 0}
 .tab[href="#gestion"]{--c:47,111,208}
 .tab[aria-current="page"]{background:rgba(var(--c),.42);border-color:rgb(var(--c));box-shadow:0 1px 0 rgba(var(--c),.6)}
 @media(max-width:420px){.tab{font-size:.82rem;padding:.45rem .15rem}}
+@media(max-width:420px){.tab{font-size:min(.82rem,calc((100vw - 40px) / 26))}}
 main{padding-top:1rem}
 
 input,select,textarea,button{font:inherit;color:inherit}
@@ -294,6 +295,20 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .brand h1{font-weight:800;font-style:italic;letter-spacing:.01em;font-size:1.95rem;line-height:1;white-space:nowrap}
 .brand h1 .h1b{color:var(--accent,#1f6fd6)}
 @media (max-width:560px){.brand h1{font-size:clamp(1rem,calc((100vw - 208px) / 9.2),1.6rem)}.brandL{min-width:0}}
+/* ---- v1.24.1 cabecera más grande ---- */
+.logo{width:88px;height:88px}
+.brand h1{font-size:2.35rem}
+.brand .eyebrow{font-size:.9rem;letter-spacing:.07em}
+.credit-d{font-size:.78rem}
+.org-d img{height:76px}
+.brand{flex-wrap:nowrap;align-items:center}
+@media (max-width:560px){
+.brandL .logo{width:56px;height:56px}
+.brand h1{font-size:clamp(1.05rem,calc((100vw - 226px) / 8.6),1.9rem)}
+.brand .eyebrow{font-size:clamp(.58rem,calc((100vw - 226px) / 20),.78rem)}
+.org-d img{height:46px}
+}
+@media (max-width:380px){.org-d img{height:36px}.brandL .logo{width:48px;height:48px}.brand h1{font-size:clamp(.9rem,calc((100vw - 190px) / 8.6),1.5rem)}.brand .eyebrow{font-size:.56rem;letter-spacing:.03em}}
 .docs-card{border-left:5px solid var(--accent)}
 .doc-row{display:flex;gap:.7rem;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:.65rem .75rem;margin:.55rem 0}
 .doc-row .what{flex:1;min-width:150px}.doc-ic{font-size:2rem;line-height:1;width:2.4rem;text-align:center}
