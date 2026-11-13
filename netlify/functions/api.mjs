@@ -173,7 +173,7 @@ function cleanTeachers(v) {
   for (const k of keys) {
     if (!/^[a-z0-9-]{1,80}$/.test(k)) continue;
     const t = v[k] || {};
-    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS), course: str(t.course, 12).trim(), archived: !!t.archived, ...(t.needsVal ? { needsVal: true } : {}) };
+    out[k] = { tkey: k, name: str(t.name, 80), valTeam: t.valTeam == null ? null : int(t.valTeam, 1, TEAMS), course: str(t.course, 12).trim(), archived: !!t.archived, ...(t.needsVal ? { needsVal: true } : {}), ...(t.self ? { self: true, joined: str(t.joined, 10) } : {}) };
   }
   return out;
 }
@@ -460,7 +460,7 @@ async function book(b) {
     if (here.length >= st.cap) fail("Esa franja está completa.");
 
     const tdata = { ...teachers.data };
-    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true };
+    const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true, ...(newEmail ? { self: true, joined: now.date } : {}) };
     let teachersDirty = !tdata[tk];
     if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
     // Profesor nuevo: primero valoración y prescripción; hasta entonces no puede reservar entrenamiento guiado.

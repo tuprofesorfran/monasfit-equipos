@@ -891,6 +891,14 @@ function vAdmin(){
   var html='<h2 style="margin-top:0">Gestión</h2>';
   if(!S.bookings.length)html+='<div class="note ok">Las reservas llegan solas cuando el profesorado reserva en la pestaña «Reservar». Antes, revisa la disponibilidad y escribe los equipos. Si ya tienes reservas en otra app, pégalas en «Pegar varias reservas».</div>';
 
+  (function(){
+    var lim=addDays(todayStr(),-30);
+    var emOf={};Object.keys(S.emails||{}).forEach(function(e){emOf[S.emails[e]]=e;});
+    var ns=Object.keys(S.teachers).filter(function(k){var t=S.teachers[k];return t.self&&t.joined&&t.joined>=lim&&!t.archived;}).sort(function(a,b){return S.teachers[a].joined<S.teachers[b].joined?1:-1;}).slice(0,12);
+    if(!ns.length)return;
+    html+='<div class="card"><h3>Altas nuevas</h3><p class="muted small">Profesorado que se ha unido por su cuenta en los últimos 30 días.</p>'+ns.map(function(k){var t=S.teachers[k];
+      return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
+  })();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1003,7 +1011,8 @@ function bookModal(st,today,last,tk){
   h+=(S.emailMode?
     '<label for="bk-email" style="margin-top:.2rem">Tu correo corporativo</label>'+
     '<input id="bk-email" data-keep data-change="bkemail" type="email" inputmode="email" autocomplete="email" autocapitalize="off" spellcheck="false" value="'+esc(S.email)+'" placeholder="nombre@edu.gva.es">'+
-    (S.needName?'<label for="bk-fullname">Tu nombre y apellidos</label><input id="bk-fullname" data-keep autocomplete="name" placeholder="Por ejemplo: Laura Justamante"><p class="muted small" style="margin:.3rem 0 0">Es tu primera vez en el proyecto: con tu nombre te das de alta. Después solo necesitarás el correo.</p>':''):
+    '<label for="bk-fullname">Tu nombre y apellidos <span class="muted small">(solo si es tu primera vez)</span></label><input id="bk-fullname" data-keep autocomplete="name" placeholder="Por ejemplo: Laura Justamante">'+
+    '<p class="muted small" style="margin:.3rem 0 0">'+(S.needName?'<strong>Es tu primera vez en el proyecto:</strong> escribe tu nombre para darte de alta. ':'Si ya has reservado antes, déjala en blanco. ')+'Después solo necesitarás el correo.</p>':
     '<label for="bk-name" style="margin-top:.2rem">Tu nombre</label><input id="bk-name" data-keep data-change="bkname" autocomplete="off" value="'+esc(S.name)+'" placeholder="Por ejemplo: Laura J."><p class="muted small" style="margin:.3rem 0 0">Escríbelo siempre igual, para que se reconozca tu equipo de valoración.</p>')+
     '<label>¿Qué necesitas?</label><div class="filters">'+
     '<button class="chip" data-act="btype" data-t="V" aria-pressed="'+(S.btype==="V")+'">Valoración (V)</button>'+
@@ -1245,11 +1254,9 @@ var actions={
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)){say("Escribe tu correo corporativo completo antes de reservar.","err");render();return;}
       if(em!==S.email){S.email=em;S.myTk="";lsSet("monasfit.email",em);lsSet("monasfit.tkey","");}
       who={email:em};
-      if(S.needName){
-        var fn=val("bk-fullname").trim().replace(/\s+/g," ");
-        if(fn.length<2){say("Escribe tu nombre y apellidos para unirte al proyecto.","err");render();return;}
-        who.name=fn;
-      }
+      var fn=val("bk-fullname").trim().replace(/\s+/g," ");
+      if(S.needName&&fn.length<2){say("Escribe tu nombre y apellidos para unirte al proyecto.","err");render();return;}
+      if(fn.length>=2)who.name=fn;
     }else{
       var nm=val("bk-name").trim().replace(/\s+/g," ");
       if(nm.length<2){say("Escribe tu nombre antes de reservar.","err");render();return;}
