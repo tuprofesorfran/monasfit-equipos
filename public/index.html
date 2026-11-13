@@ -311,6 +311,22 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .ab-mis{margin:.9rem 0 0;padding:.6rem .8rem;border-radius:12px;background:rgba(246,166,90,.18);font-style:italic;font-weight:600;text-align:center}
 @media(max-width:360px){.ab-stats{grid-template-columns:repeat(2,1fr)}}
 .about .src{font-size:.78rem;color:var(--muted);margin-top:.8rem}
+.card.tcol{background:rgba(var(--c),.18);border:1.5px solid rgba(var(--c),.45)}
+/* ---- v1.27.0 calendario con líneas marcadas ---- */
+:root{--grid:#8fa4bb}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--grid:#556a82}}
+:root[data-theme="dark"]{--grid:#556a82}
+.cal.rv{gap:2px;background:var(--grid);border:2px solid var(--grid);border-radius:12px;overflow:hidden}
+.cal.rv .cal-h,.cal.rv .cal-t,.cal.rv .cal-break{background:var(--surface);border-radius:0;margin:0}
+.cal.rv>div:first-child:empty{background:var(--surface)}
+.cal.rv .cal-h{padding:.35rem 0}
+.cal.rv .cal-h.today{background:var(--sun-soft);box-shadow:inset 0 -3px 0 var(--sun)}
+.cal.rv .cal-t{padding:0 .25rem;text-align:center;align-items:center;border-right:0}
+.cal.rv .cal-break{background:repeating-linear-gradient(135deg,var(--c-na),var(--c-na) 6px,var(--surface-2) 6px,var(--surface-2) 12px);font-weight:600}
+.cal.rv .cell{border-radius:0;border-width:2px;margin:0}
+.cal.rv .cell.sel{border-color:var(--fg)}
+.cal.rv .cell.mine{outline-offset:-4px}
+@media (max-width:560px){.cal.rv{gap:2px}}
 /* ---- v1.24.1 cabecera más grande ---- */
 .logo{width:88px;height:88px}
 .brand h1{font-size:2.35rem}
@@ -747,6 +763,8 @@ function fAskForm(k){
     '<div class="row" style="margin-top:.6rem"><button class="btn primary" data-act="fLogin" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>Entrar</button><button class="btn" data-act="fAskNo">Cancelar</button></div>'+
     '<p class="muted small" style="margin-top:.5rem">La clave te la da el coordinador. Si la has perdido, pídele una nueva.</p></div>';
 }
+var TCOLS=["90,169,230","246,166,90","255,214,102","240,114,106","47,111,208"];
+function tColor(k){var h=0,i;k=String(k||"");for(i=0;i<k.length;i++)h=(h*31+k.charCodeAt(i))>>>0;return TCOLS[h%TCOLS.length];}
 function vTeachers(){
   if(S.fk&&S.fdata)return vFicha();
   var ks=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;}).sort(function(a,b){return S.teachers[a].name.localeCompare(S.teachers[b].name,"es");});
@@ -756,7 +774,7 @@ function vTeachers(){
   ks.forEach(function(k){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
-    html+='<div class="card"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">'+(vDone(k)?'Valoración realizada por equipo ':'Valora el equipo ')+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+(vt&&membersOf(vt)?'<p class="muted small" style="margin:.25rem 0 0">👥 '+esc(membersOf(vt))+'</p>':'')+
+    html+='<div class="card tcol" style="--c:'+tColor(k)+'"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">'+(vDone(k)?'Valoración realizada por equipo ':'Valora el equipo ')+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+(vt&&membersOf(vt)?'<p class="muted small" style="margin:.25rem 0 0">👥 '+esc(membersOf(vt))+'</p>':'')+
       (dueTag(k)?'<p style="margin:.2rem 0">'+dueTag(k)+'</p>':'')+'<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&(vTeamOf(k)===S.team||S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending";}))?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
