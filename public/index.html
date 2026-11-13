@@ -306,6 +306,7 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .ab-h{margin:.9rem 0 .35rem;font-size:.8rem;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
 .ab-tl{list-style:none;margin:0;padding:0 0 0 .2rem;border-left:3px solid #f6a65a;display:flex;flex-direction:column;gap:.45rem}
 .ab-tl li{display:flex;gap:.6rem;align-items:baseline;padding-left:.6rem}.ab-tl b{flex:none;width:2.6rem;color:var(--accent,#1f6fd6)}.ab-tl span{font-size:.9rem;line-height:1.25}
+.ab-gal{display:flex;gap:.4rem;overflow-x:auto;margin:-.2rem 0 .5rem;padding-bottom:.2rem;scroll-snap-type:x mandatory}.ab-gal img{height:96px;width:auto;border-radius:10px;flex:none;scroll-snap-align:start}
 .ab-chips{display:flex;flex-wrap:wrap;gap:.35rem}
 .ab-mis{margin:.9rem 0 0;padding:.6rem .8rem;border-radius:12px;background:rgba(246,166,90,.18);font-style:italic;font-weight:600;text-align:center}
 @media(max-width:360px){.ab-stats{grid-template-columns:repeat(2,1fr)}}
@@ -822,6 +823,7 @@ function vFab(){
   var lead=(S.ranking||[])[0];
   var h='<button class="fab" data-act="rankOpen" aria-label="Ver el ranking de equipos"><span class="fab-i" aria-hidden="true">🏆</span><span class="fab-t">Ranking'+(lead?'<small>Líder: equipo '+lead.team+'</small>':'<small>¡Puntúa y sube!</small>')+'</span></button>';
   if(S.aboutOpen)h+=vAbout();
+  if(S.atecaOpen)h+=vAteca();
   if(S.rankOpen)h+='<div class="sheet-bg" data-act="rankClose"><div class="sheet" role="dialog" aria-modal="true" aria-label="Ranking de equipos"><button class="btn sm sheet-x" data-act="rankClose">Cerrar ✕</button>'+vRanking()+'</div></div>';
   return h;
 }
@@ -1187,7 +1189,7 @@ function view(){
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
   else body=vMine()+(S.askTeam?"":vRanking());
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">SALUD</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">SALUD</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
     '</div><p class="credit credit-m">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
@@ -1206,6 +1208,21 @@ function vAbout(){
   '<h3 class="ab-h">Valores del centro</h3><div class="ab-chips">'+val.map(function(v){return '<span class="tag on">'+v+'</span>';}).join("")+'</div>'+
   '<p class="ab-mis">Misión: educación integral y de calidad para formar personas autónomas y creativas</p>'+
   '<p class="src">Fuentes: Proyecto Educativo del centro (2018) y prensa local (Alicante Plaza, marzo 2024).</p></div></div>';
+}
+function vAteca(){
+  var st=[["2025","aula concedida"],["2026","puesta en marcha"],["NOVIGI","red a la que pertenece"]];
+  var q=["Gafas de realidad virtual","Dron","Cámara 360º","Impresora 3D","Pantalla interactiva","Remoergómetro","Bicicletas de ciclismo indoor","Cinta de correr","Básculas de bioimpedancia","Medidor de lactato","Máquinas isoinerciales","Encoder","Dinamómetros","Maniquíes de RCP","Ordenadores"];
+  return '<div class="sheet-bg" data-act="atecaClose"><div class="sheet about" role="dialog" aria-modal="true" aria-label="Aula Ateca"><button class="btn sm sheet-x" data-act="atecaClose">Cerrar ✕</button>'+
+  '<p class="eyebrow">Nuestra aula</p><h2>Aula Ateca · IES Monastil</h2><p class="small muted" style="margin:0 0 .6rem">Aula de Tecnología Aplicada y gimnasio</p>'+
+  '<img class="ph" src="/img/aula-ateca.jpg" alt="Aula Ateca" onerror="this.remove()">'+
+  '<div class="ab-gal">'+["aula-ateca-2","aula-ateca-3","aula-ateca-4","gimnasio-1","gimnasio-2","gimnasio-3"].map(function(f){return '<img src="/img/'+f+'.jpg" alt="Aula Ateca" loading="lazy" onerror="this.remove()">';}).join("")+'</div>'+
+  '<div class="ab-stats" style="grid-template-columns:repeat(3,1fr)">'+st.map(function(x){return '<div class="ab-st"><b>'+x[0]+'</b><span>'+x[1]+'</span></div>';}).join("")+'</div>'+
+  '<h3 class="ab-h">Su historia</h3><ol class="ab-tl"><li><b>2025</b><span>Se concede el aula al centro dentro del programa INNOVATEC</span></li><li><b>2026</b><span>Se pone en marcha y empieza a usarse con el alumnado</span></li><li><b>Hoy</b><span>El centro forma parte de la red NOVIGI</span></li></ol>'+
+  '<h3 class="ab-h">Qué es INNOVATEC</h3><p class="small" style="margin:0 0 .4rem">Programa de la red NOVIGI de la Conselleria para modernizar la FP con metodologías activas y tecnología.</p><div class="ab-chips">'+["Aprendizaje colaborativo por proyectos","Evaluación formativa","El docente como guía","Digitalización en todas las familias"].map(function(v){return '<span class="tag">'+v+'</span>';}).join("")+'</div>'+
+  '<h3 class="ab-h">Qué hay en el aula</h3><div class="ab-chips">'+q.map(function(v){return '<span class="tag on">'+v+'</span>';}).join("")+'</div>'+
+  '<h3 class="ab-h">Y el gimnasio</h3><div class="ab-chips">'+["Racks de sentadilla","Bancos regulables","Cajones pliométricos","Poleas y máquinas guiadas","Zona de peso libre"].map(function(v){return '<span class="tag on">'+v+'</span>';}).join("")+'</div>'+
+  '<p class="ab-mis">Aquí nace MonasFIT Salud: el alumnado valora y entrena al profesorado</p>'+
+  '<p class="src">Fuentes: Radio Elda Cadena SER, Guía de buenas prácticas del programa INNOVATEC (Conselleria) y fotos del aula.</p></div></div>';
 }
 function render(){
   var saved={},act=document.activeElement,fid=act&&act.id,ss=null,se=null,restore=!S.noRestore;
@@ -1443,6 +1460,8 @@ var actions={
     run(async function(){var r=await api("ficha",{method:"POST",headers:fHeaders(k),body:{tkey:k,valoraciones:list,entrevista:S.fdata.ficha.entrevista}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Medición guardada.");
   },
   rankOpen:function(){S.rankOpen=true;S.noRestore=true;render();},
+  atecaOpen:function(){S.atecaOpen=true;S.noRestore=true;render();},
+  atecaClose:function(){S.atecaOpen=false;S.noRestore=true;render();},
   aboutOpen:function(){S.aboutOpen=true;S.noRestore=true;render();},
   aboutClose:function(){S.aboutOpen=false;S.noRestore=true;render();},
   rankClose:function(d,ev){S.rankOpen=false;S.noRestore=true;render();},
@@ -1622,7 +1641,7 @@ $app.addEventListener("click",function(e){
   if(b.classList.contains("sheet-bg")&&e.target!==b)return;
   var f=actions[b.dataset.act];if(f)f(b.dataset);
 });
-document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;if(S.aboutOpen){S.aboutOpen=false;S.noRestore=true;render();}else if(S.rankOpen){S.rankOpen=false;S.noRestore=true;render();}else if(S.confirmBook){S.confirmBook=null;render();}});
+document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;if(S.atecaOpen){S.atecaOpen=false;S.noRestore=true;render();}else if(S.aboutOpen){S.aboutOpen=false;S.noRestore=true;render();}else if(S.rankOpen){S.rankOpen=false;S.noRestore=true;render();}else if(S.confirmBook){S.confirmBook=null;render();}});
 $app.addEventListener("change",function(e){
   var el=e.target;if(!el.dataset||!el.dataset.change)return;
   var f=changes[el.dataset.change];if(f)f(el);
