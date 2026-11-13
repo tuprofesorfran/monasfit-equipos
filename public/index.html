@@ -645,6 +645,21 @@ function vMine(){
       html+='</div>';
     });
   }
+  (function(){
+    var all=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;});
+    if(!all.length)return;
+    var nm=function(k){return S.teachers[k].name;},srt=function(x,y){return nm(x).localeCompare(nm(y),"es");};
+    var own={};ks.forEach(function(k){own[k]=1;});
+    S.bookings.forEach(function(b){if(b.team===S.team&&b.tkey&&!isPend(b))own[b.tkey]=1;});
+    var mineK=all.filter(function(k){return own[k];}).sort(srt),restK=all.filter(function(k){return !own[k];}).sort(srt);
+    var op=function(k){return '<option value="'+esc(k)+'">'+esc(nm(k))+'</option>';};
+    html+='<h2>Subir documentos</h2><div class="upl"><p class="muted small" style="margin:0 0 .6rem">Sube aquí la valoración corporal, el PAR-Q o la prescripción de los profesores que valoráis o entrenáis. Los verá el profesor en su ficha.</p>'+
+      '<div class="step"><b>1</b> Elige al profesor</div><select id="tdoc-t" data-keep><option value="">Elige al profesor…</option>'+
+      (mineK.length?'<optgroup label="Tus profesores">'+mineK.map(op).join("")+'</optgroup>':"")+
+      (restK.length?'<optgroup label="Resto del profesorado">'+restK.map(op).join("")+'</optgroup>':"")+'</select>'+
+      '<div class="step" style="margin-top:.8rem"><b>2</b> Elige el tipo de documento</div><select id="tdoc-cat" data-keep>'+catOpts("",true)+'</select>'+
+      '<div class="step" style="margin-top:.8rem"><b>3</b> Elige el archivo (máx. 4 MB)</div><input id="tdoc" type="file" data-change="tdoc" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.docx,.xlsx"></div>';
+  })();
   if(past.length){
     html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' sesiones anteriores ('+past.length+')</button></div>';
     if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){html+=dayHead(g.date)+g.items.map(sessionCard).join("");});
@@ -1477,6 +1492,19 @@ var changes={
       var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
       S.fdata.ficha=r.ficha;S.noRestore=true;
     },"Documento subido.");
+  },
+  tdoc:function(el){
+    var f=el.files&&el.files[0];if(!f)return;
+    var k=val("tdoc-t"),cat=val("tdoc-cat");
+    if(!k){el.value="";say("Elige primero al profesor.","err");render();return;}
+    if(!cat){el.value="";say("Elige primero el tipo de documento (valoración corporal, PAR-Q o prescripción).","err");render();return;}
+    if(f.size>4*1024*1024){el.value="";say("El archivo pesa más de 4 MB.","err");render();return;}
+    var who=S.teachers[k]?S.teachers[k].name:"";
+    run(async function(){
+      var buf=await f.arrayBuffer();
+      await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
+      S.noRestore=true;
+    },"Documento subido"+(who?" a la ficha de "+who:"")+".");
   },
   docCat:function(el){var k=S.fk,id=el.dataset.id,c=el.value;if(!c){render();return;}run(async function(){var r=await api("doc-cat",{method:"POST",headers:fHeaders(k),body:{tkey:k,id:id,cat:c}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Tipo de documento cambiado.");},
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
