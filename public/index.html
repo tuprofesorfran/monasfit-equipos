@@ -296,7 +296,7 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 @media (max-width:560px){.brand h1{font-size:clamp(1rem,calc((100vw - 208px) / 9.2),1.6rem)}.brandL{min-width:0}}
 .docs-card{border-left:5px solid var(--accent)}
 .doc-row{display:flex;gap:.7rem;align-items:center;justify-content:space-between;flex-wrap:wrap;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:.65rem .75rem;margin:.55rem 0}
-.doc-row .what{flex:1;min-width:150px}.doc-ic{font-size:1.6rem;line-height:1}
+.doc-row .what{flex:1;min-width:150px}.doc-ic{font-size:2rem;line-height:1;width:2.4rem;text-align:center}
 .upl{margin-top:1.1rem;padding:.9rem;border:2px dashed var(--accent);border-radius:14px;background:var(--accent-soft)}
 .upl .step{display:flex;align-items:center;gap:.5rem;font-weight:700;margin:.2rem 0 .4rem}
 .upl .step b{display:inline-grid;place-items:center;width:1.5rem;height:1.5rem;border-radius:50%;background:var(--accent);color:var(--accent-ink);font-size:.8rem}
@@ -707,7 +707,7 @@ function vTeachers(){
   return html;
 }
 var DOC_CATS=[["valoracion","COMPOSICIÓN CORPORAL"],["parq","PAR-Q"],["prescripcion","PRESCRIPCIÓN"],["otro","OTRO DOCUMENTO"]];
-function docIcon(x){var n=((x.name||"")+"").toLowerCase();if(/\.pdf$/.test(n))return "📕";if(/\.(png|jpe?g|webp)$/.test(n))return "🖼️";if(/\.docx?$/.test(n))return "📝";if(/\.xlsx?$/.test(n))return "📊";return "📄";}
+function docIcon(x,dc){if(dc==="valoracion")return "🧍";if(dc==="parq")return "🩺";if(dc==="prescripcion")return "🏋️";var n=((x.name||"")+"").toLowerCase();if(/\.pdf$/.test(n))return "📕";if(/\.(png|jpe?g|webp)$/.test(n))return "🖼️";if(/\.docx?$/.test(n))return "📝";if(/\.xlsx?$/.test(n))return "📊";return "📄";}
 function docLabel(c){for(var i=0;i<DOC_CATS.length;i++)if(DOC_CATS[i][0]===c)return DOC_CATS[i][1];return "OTRO DOCUMENTO";}
 function guessCat(n){
   var s=String(n||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
@@ -851,7 +851,7 @@ function vFicha(){
   if(!(f.docs||[]).length)html+='<p class="muted small">No hay documentos.</p>';
   (f.docs||[]).forEach(function(x){
     var dc=docCat(x);
-    html+='<div class="doc-row dc-'+esc(dc)+'"><span class="doc-ic" aria-hidden="true">'+docIcon(x)+'</span><div class="what"><span class="dc-chip">'+docLabel(dc)+'</span><div class="small muted">'+esc(fmtShort(x.at))+' · '+fmtSize(x.size)+'</div>'+
+    html+='<div class="doc-row dc-'+esc(dc)+'"><span class="doc-ic" aria-hidden="true">'+docIcon(x,dc)+'</span><div class="what"><span class="dc-chip">'+docLabel(dc)+'</span><div class="small muted">'+esc(fmtShort(x.at))+' · '+fmtSize(x.size)+'</div>'+
       (ro?"":'<select class="docsel" data-change="docCat" data-id="'+esc(x.id)+'" aria-label="Cambiar el tipo de documento">'+catOpts("",false).replace('<option value="valoracion">','<option value="" selected>Cambiar tipo…</option><option value="valoracion">')+'</select>')+'</div><div class="row">'+
       '<button class="btn sm primary" data-act="fDown" data-id="'+esc(x.id)+'">⬇ Descargar</button>'+
       (ro?"":(S.confirmDoc===x.id?'<button class="btn sm danger" data-act="fDelDocYes" data-id="'+esc(x.id)+'">Borrar</button><button class="btn sm" data-act="fDelDocNo">No</button>':'<button class="btn sm" data-act="fDelDoc" data-id="'+esc(x.id)+'">Borrar</button>'))+'</div></div>';
