@@ -1040,6 +1040,21 @@ function mailCard(){
   t.forEach(function(x){h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(x.name)+'</strong><br><small class="muted">'+esc(x.email||"sin correo")+'</small></span><span class="due '+(x.sent?'due-booked':(x.email?'due-soon':'due-late'))+'">'+(x.sent?'✓ enviado':(x.email?(x.days<0?'retrasada':'en '+x.days+' d'):'sin correo'))+'</span></div>';});
   return h+'</div>';
 }
+function backupCard(){
+  var b=S.backups,h='<div class="card"><h3>Copias de seguridad</h3><p class="muted small">Cada madrugada (a partir de las 3:00) la aplicación guarda sola una copia de los datos: reservas, profesorado, equipos, fichas y prescripciones. Se conservan las últimas 14. Los archivos subidos (PDF) no entran en la copia. Puedes descargar una copia o restaurarla si algo sale mal.</p>';
+  if(!b)return h+'<button class="btn primary" data-act="backupLoad"'+(S.busy?" disabled":"")+'>Ver copias</button></div>';
+  h+='<div class="row" style="margin:.4rem 0"><button class="btn primary" data-act="backupNow"'+(S.busy?" disabled":"")+'>Hacer copia ahora</button> <button class="btn sm" data-act="backupLoad">Actualizar</button></div>';
+  if(!b.length)h+='<p class="muted small">Todavía no hay copias. La primera se hará esta madrugada o cuando pulses «Hacer copia ahora».</p>';
+  b.forEach(function(c){
+    var pre=/antes-restaurar/.test(c.name),lbl=(c.at?new Date(c.at).toLocaleString("es-ES",{timeZone:"Europe/Madrid",weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):c.name)+(pre?" · antes de restaurar":/manual/.test(c.name)?" · manual":"");
+    h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 11rem"><strong>'+esc(lbl)+'</strong><br><small class="muted">'+(c.keys||0)+' elementos · '+Math.max(1,Math.round((c.size||0)/1024))+' KB</small></span><span class="row">'
+      +'<button class="btn sm" data-act="backupDown" data-n="'+esc(c.name)+'">Descargar</button>'
+      +(S.backupConf===c.name?'<button class="btn sm danger" data-act="backupRestore" data-n="'+esc(c.name)+'"'+(S.busy?" disabled":"")+'>Sí, restaurar</button><button class="btn sm" data-act="backupNoRestore">No</button>':'<button class="btn sm" data-act="backupAsk" data-n="'+esc(c.name)+'">Restaurar</button>')
+      +'</span></div>';
+    if(S.backupConf===c.name)h+='<p class="note">Se sustituirán los datos actuales por los de esta copia. Antes se guarda una copia de seguridad de lo que hay ahora, por si quieres deshacerlo.</p>';
+  });
+  return h+'</div>';
+}
 function docSumCard(){
   var h='<div class="card"><h3>Documentos de las valoraciones</h3><p class="muted small">Comprueba qué tiene subido cada profesor en su ficha: composición corporal, PAR-Q y prescripción. Solo salen los que ya tienen una primera valoración hecha.</p>';
   if(!S.docSum)return h+'<button class="btn primary" data-act="docSumLoad"'+(S.busy?" disabled":"")+'>Revisar fichas</button></div>';
@@ -1073,7 +1088,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=docSumCard();
+  html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1663,6 +1678,18 @@ var actions={
   mailTplSave:function(){var g=function(i){var e=document.getElementById(i);return e?e.value:"";};S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{subject:g("mt-subject"),soon:g("mt-soon"),late:g("mt-late")}});S.mailSt.tpl=r.tpl;},"Texto del correo guardado.");},
   mailTplReset:function(){S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{reset:true}});S.mailSt.tpl=r.tpl;},"Restaurado el texto por defecto.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
+  backupLoad:function(){run(async function(){var r=await api("backup-list");S.backups=r.copies;},"Copias actualizadas.");},
+  backupNow:function(){run(async function(){var r=await api("backup-now",{method:"POST",body:{}});S.backups=r.copies;},"Copia hecha.");},
+  backupAsk:function(d){S.backupConf=d.n;render();},
+  backupNoRestore:function(){S.backupConf=null;render();},
+  backupRestore:function(d){var n=d.n;run(async function(){var r=await api("backup-restore",{method:"POST",body:{name:n,confirm:true}});S.backups=r.copies;S.backupConf=null;await refresh();},"Copia restaurada.");},
+  backupDown:function(d){
+    fetch("/api/backup-get?name="+encodeURIComponent(d.n),{headers:{"x-admin":S.adminPass||""}}).then(function(r){
+      if(!r.ok)return r.json().then(function(j){throw new Error((j&&j.error)||"No se pudo descargar.");});
+      return r.blob();
+    }).then(function(b){var u=URL.createObjectURL(b),a=document.createElement("a");a.href=u;a.download=d.n;document.body.appendChild(a);a.click();a.remove();setTimeout(function(){URL.revokeObjectURL(u);},4000);})
+    .catch(function(e){say(e.message||"No se pudo descargar.","err");render();});
+  },
   docSumLoad:function(){run(async function(){var r=await api("fichas-resumen");S.docSum=r.sum;},"Fichas revisadas.");},
   docSumOnly:function(){S.docSumAll=!S.docSumAll;S.noRestore=true;render();},
   tNoVal:function(d){run(async function(){var t=S.teachers[d.k];if(t)delete t.needsVal;await saveColl("teachers");},"Listo: ya puede reservar entrenamientos.");},

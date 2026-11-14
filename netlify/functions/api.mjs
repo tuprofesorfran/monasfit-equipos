@@ -410,6 +410,47 @@ export async function mailReminders(force) {
   await store().setJSON("mailstate", st);
   return { sent };
 }
+/* ---------- Copias de seguridad ---------- */
+const backupStore = () => getStore({ name: "monasfit-backups", consistency: "strong" });
+const BACKUP_KEEP = 14;
+const BACKUP_SKIP = (k) => k === "lock" || k === "logo" || k === "logo.meta" || /^(docs|tokens|push|backup)\//.test(k);
+async function makeBackup(tag) {
+  const s = store();
+  const { blobs } = await s.list();
+  const data = {};
+  for (const b of blobs) {
+    if (BACKUP_SKIP(b.key)) continue;
+    try { const v = await s.get(b.key, { type: "json" }); if (v !== null && v !== undefined) data[b.key] = v; } catch {}
+  }
+  const now = madridNow();
+  const name = "copia-" + now.date + "-" + String(Math.floor(now.min / 60)).padStart(2, "0") + String(now.min % 60).padStart(2, "0") + (tag ? "-" + tag : "") + ".json";
+  const body = JSON.stringify({ app: "monasfit-salud", at: Date.now(), date: now.date, keys: Object.keys(data).length, data });
+  const bs = backupStore();
+  await bs.set(name, body);
+  const all = (await bs.list()).blobs.map((x) => x.key).filter((k) => /^copia-/.test(k) && !/-antes-restaurar/.test(k)).sort();
+  for (const k of all.slice(0, Math.max(0, all.length - BACKUP_KEEP))) { try { await bs.delete(k); } catch {} }
+  return { name, keys: Object.keys(data).length, size: body.length };
+}
+async function listBackups() {
+  const bs = backupStore();
+  const out = [];
+  for (const b of (await bs.list()).blobs) {
+    if (!/^copia-/.test(b.key)) continue;
+    let meta = null;
+    try { const t = await bs.get(b.key, { type: "text" }); const o = JSON.parse(t); meta = { at: o.at, date: o.date, keys: o.keys, size: t.length }; } catch {}
+    out.push({ name: b.key, ...(meta || {}) });
+  }
+  return out.sort((a, c) => (a.name < c.name ? 1 : -1));
+}
+async function autoBackup() {
+  const now = madridNow();
+  if (now.min < 180) return null; // a partir de las 3:00
+  const st = (await store().get("backupstate", { type: "json" })) || {};
+  if (st.day === now.date) return null;
+  const r = await makeBackup("auto");
+  await store().setJSON("backupstate", { day: now.date });
+  return r;
+}
 export async function cronJob() {
   await runSweep();
   const nowMs = Date.now();
@@ -429,7 +470,9 @@ export async function cronJob() {
   await flushPush();
   let mailed = {};
   try { mailed = await mailReminders(false); } catch (e) { console.log("mail cron", String(e).slice(0, 160)); }
-  return { reminded: due.length, mailed };
+  let backed = null;
+  try { backed = await autoBackup(); } catch (e) { console.log("backup cron", String(e).slice(0, 160)); }
+  return { reminded: due.length, mailed, backed };
 }
 async function respond(req, b, admin) {
   const id = str(b && b.id, 40);
@@ -761,6 +804,48 @@ async function fichaRoutes(route, req, url, admin) {
       sum[tk] = c;
     }));
     return json({ sum, at: Date.now() });
+  }
+  if (route === "backup-list" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    return json({ copies: await listBackups(), keep: BACKUP_KEEP });
+  }
+  if (route === "backup-now" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const r = await makeBackup("manual");
+    return json({ ok: true, ...r, copies: await listBackups() });
+  }
+  if (route === "backup-get" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    const name = str(url.searchParams.get("name"), 80);
+    if (!/^copia-[\w.-]+\.json$/.test(name)) fail("Nombre de copia no válido.");
+    const t = await backupStore().get(name, { type: "text" });
+    if (!t) return json({ error: "No existe esa copia." }, 404);
+    return new Response(t, { headers: { "content-type": "application/json; charset=utf-8", "content-disposition": "attachment; filename=\"" + name + "\"", "cache-control": "no-store" } });
+  }
+  if (route === "backup-restore" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const name = str(b && b.name, 80);
+    if (!/^copia-[\w.-]+\.json$/.test(name) || !b || b.confirm !== true) fail("Falta confirmar la restauración.");
+    const t = await backupStore().get(name, { type: "text" });
+    if (!t) fail("No existe esa copia.");
+    let obj; try { obj = JSON.parse(t); } catch { fail("La copia está dañada."); }
+    if (!obj || obj.app !== "monasfit-salud" || !obj.data) fail("La copia no es válida.");
+    const safety = await makeBackup("antes-restaurar");
+    let n = 0;
+    await withLock(async () => {
+      const s = store();
+      for (const [k, v] of Object.entries(obj.data)) {
+        if (BACKUP_SKIP(k)) continue;
+        let val = v;
+        if (val && typeof val === "object" && "rev" in val && typeof val.rev === "number") {
+          const cur = await s.get(k, { type: "json" });
+          val = { ...val, rev: Math.max(val.rev, (cur && typeof cur.rev === "number" ? cur.rev : 0)) + 1 };
+        }
+        await s.setJSON(k, val); n++;
+      }
+    });
+    return json({ ok: true, restored: n, safety: safety.name, copies: await listBackups() });
   }
   if (route === "mail-status" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
