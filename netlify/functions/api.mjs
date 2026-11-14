@@ -335,7 +335,7 @@ function firstValOf(t) {
   const a = normN(t && t.name); if (!a.length) return null;
   const c = FIRST_VAL.filter((r) => { const b = normN(r[0]); if (a[0] !== b[0]) return false; if (a.length === 1) return true;
     return a.slice(1).every((w) => b.slice(1).some((z) => z === w || (w.length === 1 && z[0] === w) || (w.length > 2 && z.indexOf(w) === 0))); });
-  return c.length === 1 ? { date: c[0][1] } : null;
+  return c.length === 1 ? { date: c[0][1], who: c[0][3] || "" } : null;
 }
 function dueInfoSrv(tk, t, bookings, today) {
   const vs = bookings.filter((b) => b.tkey === tk && b.type === "V" && b.team).sort((a, b) => (a.date < b.date ? -1 : 1));
@@ -410,6 +410,77 @@ export async function mailReminders(force) {
   await store().setJSON("mailstate", st);
   return { sent };
 }
+const docCat = (d) => {
+  if (["valoracion", "parq", "prescripcion", "otro"].includes(d.cat)) return d.cat;
+  const n = String(d.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (/par-?q|cuestionario/.test(n)) return "parq";
+  if (/tan[iy]ta|valoraci|composici|inicial|antropom/.test(n)) return "valoracion";
+  if (/rutina|entren|prescrip|hipertrofia|full ?body|marta-y-guillermo|monasfit/.test(n)) return "prescripcion";
+  return "otro";
+};
+async function docSummary(teachersData) {
+  const sum = {};
+  await Promise.all(Object.keys(teachersData).map(async (tk) => {
+    const [f, pr] = await Promise.all([readFicha(tk), store().get("prescriptions/" + tk, { type: "json" })]);
+    const c = { valoracion: 0, parq: 0, prescripcion: pr ? 1 : 0, otro: 0 };
+    (f.docs || []).forEach((d) => { c[docCat(d)]++; });
+    if ((f.valoraciones || []).length) c.valoracion += f.valoraciones.length;
+    sum[tk] = c;
+  }));
+  return sum;
+}
+/* ---------- Resumen semanal para el coordinador ---------- */
+const hhmm = (m) => String(Math.floor(m / 60)) + ":" + String(m % 60).padStart(2, "0");
+async function weeklyReport() {
+  const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
+  const today = madridNow().date;
+  const sum = await docSummary(teachers.data);
+  const groups = {};
+  let nMiss = 0;
+  for (const [tk, t] of Object.entries(teachers.data)) {
+    if (t.archived) continue;
+    const vs = bookings.data.filter((b) => b.tkey === tk && b.type === "V" && b.team && b.date <= today).sort((x, y) => (x.date < y.date ? -1 : 1));
+    const fv = firstValOf(t), lastB = vs[vs.length - 1];
+    if (!lastB && !fv) continue;
+    let who, when;
+    if (fv && (!lastB || fv.date > lastB.date)) { who = fv.who ? "Valoración de " + fv.who : "Equipo sin identificar"; when = fv.date; } else { who = "Equipo " + lastB.team; when = lastB.date; }
+    const c = sum[tk] || { valoracion: 0, parq: 0, prescripcion: 0 };
+    const miss = [];
+    if (!c.valoracion) miss.push("composición corporal");
+    if (!c.parq) miss.push("PAR-Q");
+    if (!c.prescripcion) miss.push("prescripción");
+    if (miss.length) { (groups[who] = groups[who] || []).push("- " + t.name + " (" + fmtLong(when) + "): falta " + miss.join(", ")); nMiss++; }
+  }
+  const blocks = [];
+  const keys = Object.keys(groups).sort((x, y) => x.localeCompare(y, "es"));
+  blocks.push(nMiss
+    ? "DOCUMENTOS QUE FALTAN (" + nMiss + " profesor" + (nMiss === 1 ? "" : "es") + ")\n\n" + keys.map((k) => k + ":\n" + groups[k].join("\n")).join("\n\n")
+    : "DOCUMENTOS QUE FALTAN\nNada pendiente.");
+  const tg = await mailTargets();
+  const late = tg.filter((x) => x.info.days < 0).sort((x, y) => x.info.days - y.info.days);
+  const soon = tg.filter((x) => x.info.days >= 0).sort((x, y) => x.info.days - y.info.days);
+  blocks.push("VALORACIONES RETRASADAS" + (late.length ? " (" + late.length + ")\n" + late.map((x) => "- " + x.name + ": tocaba el " + fmtLong(x.info.due)).join("\n") : "\nNinguna."));
+  blocks.push("VALORACIONES QUE TOCAN ESTA SEMANA O LA PRÓXIMA" + (soon.length ? " (" + soon.length + ")\n" + soon.map((x) => "- " + x.name + ": " + fmtLong(x.info.due) + " (en " + x.info.days + " d)").join("\n") : "\nNinguna."));
+  const end = addDays(today, 6);
+  const pend = bookings.data.filter((b) => b.date >= today && b.date <= end && b.conf === "pending" && b.team).sort((x, y) => (x.date + x.slot < y.date + y.slot ? -1 : 1));
+  blocks.push("CITAS DE ESTA SEMANA SIN CONFIRMAR POR EL EQUIPO" + (pend.length ? " (" + pend.length + ")\n" + pend.map((b) => "- " + b.teacher + " · " + fmtLong(b.date) + " " + hhmm(SLOT_START_MIN[b.slot]) + " · Equipo " + b.team).join("\n") : "\nNinguna."));
+  const nomail = tg.filter((x) => !x.email);
+  if (nomail.length) blocks.push("SIN CORREO REGISTRADO (no pueden recibir el recordatorio)\n" + nomail.map((x) => "- " + x.name).join("\n"));
+  const text = "Resumen semanal · MonasFIT Salud\n" + fmtLong(today) + "\n\n" + blocks.join("\n\n") + "\n\nEntra a Gestión: " + SITE_URL() + "/#gestion";
+  return { subject: "Resumen semanal MonasFIT Salud · " + fmtLong(today), text, nMiss, late: late.length, soon: soon.length, pend: pend.length };
+}
+async function sendWeekly(force) {
+  if (!mailReady()) return { sent: 0, skipped: "sin configurar" };
+  const cfg = (await store().get("weeklycfg", { type: "json" })) || {};
+  if (!cfg.to) return { sent: 0, skipped: "sin destinatario" };
+  const now = madridNow();
+  const st = (await store().get("weeklystate", { type: "json" })) || {};
+  if (!force && (dow(now.date) !== 1 || now.min < 450 || st.day === now.date)) return { sent: 0 };
+  const r = await weeklyReport();
+  await sendMail(cfg.to, "", (force ? "PRUEBA · " : "") + r.subject, r.text);
+  if (!force) await store().setJSON("weeklystate", { day: now.date });
+  return { sent: 1 };
+}
 /* ---------- Copias de seguridad ---------- */
 const backupStore = () => getStore({ name: "monasfit-backups", consistency: "strong" });
 const BACKUP_KEEP = 14;
@@ -470,9 +541,11 @@ export async function cronJob() {
   await flushPush();
   let mailed = {};
   try { mailed = await mailReminders(false); } catch (e) { console.log("mail cron", String(e).slice(0, 160)); }
+  let weekly = null;
+  try { weekly = await sendWeekly(false); } catch (e) { console.log("weekly cron", String(e).slice(0, 160)); }
   let backed = null;
   try { backed = await autoBackup(); } catch (e) { console.log("backup cron", String(e).slice(0, 160)); }
-  return { reminded: due.length, mailed, backed };
+  return { reminded: due.length, mailed, weekly, backed };
 }
 async function respond(req, b, admin) {
   const id = str(b && b.id, 40);
@@ -787,23 +860,29 @@ async function fichaRoutes(route, req, url, admin) {
   if (route === "fichas-resumen" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador puede ver este resumen.");
     const teachers = await read("teachers");
-    const catOf = (d) => {
-      if (["valoracion", "parq", "prescripcion", "otro"].includes(d.cat)) return d.cat;
-      const n = String(d.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-      if (/par-?q|cuestionario/.test(n)) return "parq";
-      if (/tan[iy]ta|valoraci|composici|inicial|antropom/.test(n)) return "valoracion";
-      if (/rutina|entren|prescrip|hipertrofia|full ?body|marta-y-guillermo|monasfit/.test(n)) return "prescripcion";
-      return "otro";
-    };
-    const sum = {};
-    await Promise.all(Object.keys(teachers.data).map(async (tk) => {
-      const [f, pr] = await Promise.all([readFicha(tk), store().get("prescriptions/" + tk, { type: "json" })]);
-      const c = { valoracion: 0, parq: 0, prescripcion: pr ? 1 : 0, otro: 0 };
-      (f.docs || []).forEach((d) => { c[catOf(d)]++; });
-      if ((f.valoraciones || []).length) c.valoracion += f.valoraciones.length;
-      sum[tk] = c;
-    }));
-    return json({ sum, at: Date.now() });
+    return json({ sum: await docSummary(teachers.data), at: Date.now() });
+  }
+  if (route === "weekly-get" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    const cfg = (await store().get("weeklycfg", { type: "json" })) || {};
+    const st = (await store().get("weeklystate", { type: "json" })) || {};
+    return json({ ready: mailReady(), to: cfg.to || "", lastDay: st.day || "" });
+  }
+  if (route === "weekly-save" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const to = str(b && b.to, 120).trim().toLowerCase();
+    if (to && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) fail("Escribe un correo válido.");
+    await store().setJSON("weeklycfg", { to });
+    return json({ ok: true, to });
+  }
+  if (route === "weekly-send" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    if (!mailReady()) fail("Falta configurar BREVO_API_KEY y MAIL_SENDER en Netlify.");
+    const cfg = (await store().get("weeklycfg", { type: "json" })) || {};
+    if (!cfg.to) fail("Guarda primero el correo de destino.");
+    try { await sendWeekly(true); } catch (e) { fail("No se pudo enviar: " + String(e.message || e).slice(0, 200)); }
+    return json({ ok: true });
   }
   if (route === "backup-list" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");

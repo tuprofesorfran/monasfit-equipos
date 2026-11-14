@@ -1040,6 +1040,14 @@ function mailCard(){
   t.forEach(function(x){h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(x.name)+'</strong><br><small class="muted">'+esc(x.email||"sin correo")+'</small></span><span class="due '+(x.sent?'due-booked':(x.email?'due-soon':'due-late'))+'">'+(x.sent?'✓ enviado':(x.email?(x.days<0?'retrasada':'en '+x.days+' d'):'sin correo'))+'</span></div>';});
   return h+'</div>';
 }
+function weeklyCard(){
+  var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada lunes a las 7:30 se envía a tu correo un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de la semana sin confirmar y profesorado sin correo registrado.</p>';
+  if(!w)return h+'<button class="btn primary" data-act="weeklyLoad"'+(S.busy?" disabled":"")+'>Configurar</button></div>';
+  h+='<label for="wk-to" class="small"><strong>Correo de destino</strong></label><div class="row" style="margin:.2rem 0 .5rem"><input id="wk-to" data-keep type="email" value="'+esc(w.to||"")+'" placeholder="tu correo corporativo" style="flex:1 1 12rem" autocomplete="off"><button class="btn primary" data-act="weeklySave"'+(S.busy?" disabled":"")+'>Guardar</button></div>';
+  h+='<div class="row"><button class="btn" data-act="weeklySend"'+((S.busy||!w.to||!w.ready)?" disabled":"")+'>Enviar uno ahora (prueba)</button></div>';
+  h+=(w.to?'<p class="small muted" style="margin:.5rem 0 0">Activo: se enviará a <strong>'+esc(w.to)+'</strong>'+(w.lastDay?' · último envío: '+esc(shortDate(w.lastDay)):'')+'.</p>':'<p class="small muted" style="margin:.5rem 0 0">Sin correo guardado: no se enviará nada.</p>');
+  return h+'</div>';
+}
 function backupCard(){
   var b=S.backups,h='<div class="card"><h3>Copias de seguridad</h3><p class="muted small">Cada madrugada (a partir de las 3:00) la aplicación guarda sola una copia de los datos: reservas, profesorado, equipos, fichas y prescripciones. Se conservan las últimas 14. Los archivos subidos (PDF) no entran en la copia. Puedes descargar una copia o restaurarla si algo sale mal.</p>';
   if(!b)return h+'<button class="btn primary" data-act="backupLoad"'+(S.busy?" disabled":"")+'>Ver copias</button></div>';
@@ -1088,7 +1096,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=backupCard();html+=docSumCard();
+  html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1678,6 +1686,9 @@ var actions={
   mailTplSave:function(){var g=function(i){var e=document.getElementById(i);return e?e.value:"";};S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{subject:g("mt-subject"),soon:g("mt-soon"),late:g("mt-late")}});S.mailSt.tpl=r.tpl;},"Texto del correo guardado.");},
   mailTplReset:function(){S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{reset:true}});S.mailSt.tpl=r.tpl;},"Restaurado el texto por defecto.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
+  weeklyLoad:function(){run(async function(){S.weekly=await api("weekly-get");},"");},
+  weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada lunes.":"Guardado: sin envío semanal.");},
+  weeklySend:function(){run(async function(){await api("weekly-send",{method:"POST",body:{}});},"Resumen de prueba enviado.");},
   backupLoad:function(){run(async function(){var r=await api("backup-list");S.backups=r.copies;},"Copias actualizadas.");},
   backupNow:function(){run(async function(){var r=await api("backup-now",{method:"POST",body:{}});S.backups=r.copies;},"Copia hecha.");},
   backupAsk:function(d){S.backupConf=d.n;render();},
