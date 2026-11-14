@@ -654,6 +654,27 @@ async function readJson(req) { try { return await req.json(); } catch { fail("Pe
 
 async function fichaRoutes(route, req, url, admin) {
   const q = (n) => str(url.searchParams.get(n), 120);
+  if (route === "fichas-resumen" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador puede ver este resumen.");
+    const teachers = await read("teachers");
+    const catOf = (d) => {
+      if (["valoracion", "parq", "prescripcion", "otro"].includes(d.cat)) return d.cat;
+      const n = String(d.name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+      if (/par-?q|cuestionario/.test(n)) return "parq";
+      if (/tan[iy]ta|valoraci|composici|inicial|antropom/.test(n)) return "valoracion";
+      if (/rutina|entren|prescrip|hipertrofia|full ?body|marta-y-guillermo|monasfit/.test(n)) return "prescripcion";
+      return "otro";
+    };
+    const sum = {};
+    await Promise.all(Object.keys(teachers.data).map(async (tk) => {
+      const [f, pr] = await Promise.all([readFicha(tk), store().get("prescriptions/" + tk, { type: "json" })]);
+      const c = { valoracion: 0, parq: 0, prescripcion: pr ? 1 : 0, otro: 0 };
+      (f.docs || []).forEach((d) => { c[catOf(d)]++; });
+      if ((f.valoraciones || []).length) c.valoracion += f.valoraciones.length;
+      sum[tk] = c;
+    }));
+    return json({ sum, at: Date.now() });
+  }
   if (route === "import-teachers" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador puede importar profesorado.");
     const b = await readJson(req);

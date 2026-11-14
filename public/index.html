@@ -550,12 +550,51 @@ function parseBulk(text){
 var DUE_DAYS=28,DUE_WARN=7;
 function daysBetween(a,b){var x=a.split("-").map(Number),y=b.split("-").map(Number);return Math.round((Date.UTC(y[0],y[1]-1,y[2])-Date.UTC(x[0],x[1]-1,x[2]))/86400000);}
 function shortDate(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{day:"numeric",month:"short"});}
+var FIRST_VAL=[
+["Víctor Sepulcre","2026-10-19","8:50","Andrea Sofía y Pablo"],
+["Paula Serra","2026-10-19","9:25","Andrea Sofía y Pablo"],
+["Judith Pastor","2026-10-20","12:05","Emiliano y Sofía García Ginestal"],
+["Carmen María Albert","2026-10-20","13:00","Vicente y Keyra"],
+["Bernardo Benito","2026-10-21","9:25","Rubén y Kevin"],
+["Julián Santos","2026-10-21","9:45","Gael y Sofía García Pomares"],
+["María Delgado","2026-10-21","10:10","Sonia y Lucas"],
+["José Daniel Martínez","2026-10-22","9:45","Rubén y Kevin"],
+["Carmen Lara","2026-10-22","10:10","Andrea Payá y Luis Vera"],
+["Mariló Casañez","2026-10-22","12:05","Gael y Sofía García Pomares"],
+["Alejandro Sánchez","2026-10-22","12:30","Paula y Daniel Rico"],
+["Raquel Teruel","2026-10-23","11:10","Sonia y Lucas"],
+["Carolina Llara","2026-10-26","8:50","Andrea Payá y Luis Vera"],
+["Julián Gandía","2026-10-26","9:25","Vicente y Keyra"],
+["Laura Justamante","2026-10-27","12:05","Marta García y Guillermo"],
+["María Domenech","2026-10-27","13:00","Marta García y Guillermo"],
+["Isidro Fuentes","2026-10-27","13:25","Paula y Daniel Rico"],
+["Ángela García","2026-10-28","11:10","Marta Ruiz y Luis Ibáñez"],
+["Lucía Olaya","2026-10-28","","Marta Ruiz y Luis Ibáñez"],
+["Marta Fernández","2026-10-29","9:45","Marta Ruiz y Luis Ibáñez"],
+["Adrián Martínez","2026-10-29","10:15","Íker y Alba"],
+["Alejandro Fernández","2026-10-29","11:10","Icaré y Daniel Villar"],
+["Sagrario","2026-10-29","11:35","Vicente y Keyra"],
+["Óscar Hernández","2026-10-29","12:05","Icaré y Daniel Villar"],
+["María Pilar López","2026-10-29","12:30","Íker y Alba"],
+["Asensio Díaz","2026-10-30","12:05","Emiliano y Sofía García Ginestal"],
+["Silvia Díez","2026-10-30","12:30","Vicente y Keyra"]];
+function normN(x){return String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z ]/g," ").split(/\s+/).filter(Boolean);}
+function firstValOf(k){
+  var t=S.teachers[k];if(!t)return null;var a=normN(t.name);if(!a.length)return null;
+  var c=FIRST_VAL.filter(function(r){var b=normN(r[0]);if(a[0]!==b[0])return false;
+    if(a.length===1)return true;
+    return a.slice(1).every(function(w){return b.slice(1).some(function(z){return z===w||(w.length===1&&z[0]===w)||(w.length>2&&z.indexOf(w)===0);});});});
+  return c.length===1?{date:c[0][1],hour:c[0][2],techs:c[0][3]}:null;
+}
+function fvLine(k){var f=firstValOf(k);return f?'<p class="muted small" style="margin:.2rem 0">1.ª valoración hecha el '+esc(shortDate(f.date))+(f.techs?' · '+esc(f.techs):'')+'</p>':"";}
 function dueInfo(k){
   var today=todayStr();
   var vs=S.bookings.filter(function(b){return b.tkey===k&&b.type==="V"&&b.team;}).sort(function(a,b){return a.date<b.date?-1:1;});
-  if(!vs.length)return null;
+  var fv=firstValOf(k);
+  if(!vs.length&&!fv)return null;
   var past=vs.filter(function(b){return b.date<=today;}),fut=vs.filter(function(b){return b.date>today;});
   var last=past.length?past[past.length-1].date:null,next=fut.length?fut[0].date:null;
+  if(fv&&(!last||fv.date>last))last=fv.date;
   if(!last)return {state:"first",next:next};
   var due=addDays(last,DUE_DAYS),days=daysBetween(today,due);
   if(next&&next>=addDays(last,1))return {state:"booked",last:last,due:due,days:days,next:next};
@@ -775,7 +814,7 @@ function vTeachers(){
     var t=S.teachers[k],p=S.prescriptions[k],vt=vTeamOf(k);
     var ne=S.bookings.filter(function(b){return b.tkey===k&&b.type==="E";}).length;
     html+='<div class="card tcol" style="--c:'+tColor(k)+'"><div class="row" style="justify-content:space-between"><strong>'+esc(t.name)+'</strong>'+(vt?'<span class="team'+(vt===S.team?" mine":"")+'">'+(vDone(k)?'Valoración realizada por equipo ':'Valora el equipo ')+vt+'</span>':'<span class="team">Sin valoración</span>')+'</div>'+(vt&&membersOf(vt)?'<p class="muted small" style="margin:.25rem 0 0">👥 '+esc(membersOf(vt))+'</p>':'')+
-      (dueTag(k)?'<p style="margin:.2rem 0">'+dueTag(k)+'</p>':'')+'<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&(vTeamOf(k)===S.team||S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending";}))?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
+      fvLine(k)+(dueTag(k)?'<p style="margin:.2rem 0">'+dueTag(k)+'</p>':'')+'<p class="muted small">'+ne+' entrenamiento'+(ne===1?"":"s")+' reservado'+(ne===1?"":"s")+(S.team&&!S.admin&&(vTeamOf(k)===S.team||S.bookings.some(function(b){return b.tkey===k&&b.team===S.team&&b.conf!=="pending";}))?' · <strong>'+(vTeamOf(k)===S.team?'Lo valora tu equipo':'Lo entrena tu equipo')+'</strong>':"")+'</p>';
     if(S.editing===k&&canEditPres(k))html+=presEditor(k);
     else{
       var btns='<button class="btn sm primary" data-act="openFicha" data-k="'+esc(k)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha</button>';
@@ -981,6 +1020,24 @@ function teamOptions(sel,withNone){
   for(var i=1;i<=TEAMS;i++)o+='<option value="'+i+'"'+(Number(sel)===i?" selected":"")+'>Equipo '+i+'</option>';
   return o;
 }
+function docSumCard(){
+  var h='<div class="card"><h3>Documentos de las valoraciones</h3><p class="muted small">Comprueba qué tiene subido cada profesor en su ficha: composición corporal, PAR-Q y prescripción. Solo salen los que ya tienen una primera valoración hecha.</p>';
+  if(!S.docSum)return h+'<button class="btn primary" data-act="docSumLoad"'+(S.busy?" disabled":"")+'>Revisar fichas</button></div>';
+  var rows=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived&&(firstValOf(k)||vDone(k));}).map(function(k){
+    var c=S.docSum[k]||{valoracion:0,parq:0,prescripcion:0},f=firstValOf(k),miss=[];
+    if(!c.valoracion)miss.push("composición");if(!c.parq)miss.push("PAR-Q");if(!c.prescripcion)miss.push("prescripción");
+    return {k:k,c:c,f:f,miss:miss};
+  }).sort(function(a,b){return (b.miss.length-a.miss.length)||S.teachers[a.k].name.localeCompare(S.teachers[b.k].name,"es");});
+  var inc=rows.filter(function(r){return r.miss.length;}).length;
+  var chip=function(ok,t){return '<span class="due '+(ok?'due-booked':'due-late')+'">'+(ok?'✓ ':'✗ ')+t+'</span>';};
+  h+='<p class="small"><strong>'+inc+'</strong> de '+rows.length+' fichas incompletas · <button class="btn sm" data-act="docSumLoad">Actualizar</button> <button class="btn sm" data-act="docSumOnly">'+(S.docSumAll?"Ver solo las incompletas":"Ver todas")+'</button></p>';
+  rows.filter(function(r){return S.docSumAll||r.miss.length;}).forEach(function(r){
+    var t=S.teachers[r.k],team=r.f&&r.f.techs?r.f.techs:(vTeamOf(r.k)?'equipo '+vTeamOf(r.k):'equipo sin identificar');
+    h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(team)+'</small></span><span class="row" style="gap:.25rem;flex-wrap:wrap">'+chip(r.c.valoracion,"Composición")+chip(r.c.parq,"PAR-Q")+chip(r.c.prescripcion,"Prescripción")+'</span></div>';
+  });
+  if(!rows.length)h+='<p class="muted small">Aún no hay profesores con una valoración hecha.</p>';
+  return h+'</div>';
+}
 function vAdmin(){
   var today=todayStr();
   var pend=S.bookings.filter(function(b){return !b.team;}).length;
@@ -995,6 +1052,7 @@ function vAdmin(){
     html+='<div class="card"><h3>Altas nuevas</h3><p class="muted small">Profesorado que se ha unido por su cuenta en los últimos 30 días.</p>'+ns.map(function(k){var t=S.teachers[k];
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
+  html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1579,6 +1637,8 @@ var actions={
       S.noRestore=true;
     },"Profesor añadido.");
   },
+  docSumLoad:function(){run(async function(){var r=await api("fichas-resumen");S.docSum=r.sum;},"Fichas revisadas.");},
+  docSumOnly:function(){S.docSumAll=!S.docSumAll;S.noRestore=true;render();},
   tNoVal:function(d){run(async function(){var t=S.teachers[d.k];if(t)delete t.needsVal;await saveColl("teachers");},"Listo: ya puede reservar entrenamientos.");},
   tArch:function(d){
     run(async function(){var t=S.teachers[d.k];if(t){t.archived=!t.archived;if(!t.archived&&!t.course)t.course=courseNow();}await saveColl("teachers");},"Profesorado actualizado.");
