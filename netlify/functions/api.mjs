@@ -3,6 +3,7 @@
 //   ADMIN_PASSWORD  (obligatoria) contraseña del coordinador
 //   ACCESS_CODE     (opcional)    código que debe escribir quien abre la app
 import { getStore } from "@netlify/blobs";
+import { FIRST_VAL } from "../lib/firstval.mjs";
 import { createHash, randomBytes, timingSafeEqual, createECDH, createPrivateKey, generateKeyPairSync, hkdfSync, createCipheriv, sign as cSign } from "node:crypto";
 
 export const config = { path: "/api/*" };
@@ -325,6 +326,74 @@ async function runSweep() {
 }
 const REMIND_BEFORE_MS = 3 * 3600000; // recordatorio cuando faltan 3 h para el límite
 // Tarea programada: pasa de equipo lo vencido y recuerda confirmar a quien sigue sin hacerlo
+
+/* ---- Recordatorio por correo: valoración cada 4 semanas ---- */
+const DUE_DAYS = 28, DUE_WARN = 7;
+const daysBetween = (a, b) => { const x = parts(a), y = parts(b); return Math.round((Date.UTC(y[0], y[1] - 1, y[2]) - Date.UTC(x[0], x[1] - 1, x[2])) / 86400000); };
+const normN = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z ]/g, " ").split(/\s+/).filter(Boolean);
+function firstValOf(t) {
+  const a = normN(t && t.name); if (!a.length) return null;
+  const c = FIRST_VAL.filter((r) => { const b = normN(r[0]); if (a[0] !== b[0]) return false; if (a.length === 1) return true;
+    return a.slice(1).every((w) => b.slice(1).some((z) => z === w || (w.length === 1 && z[0] === w) || (w.length > 2 && z.indexOf(w) === 0))); });
+  return c.length === 1 ? { date: c[0][1] } : null;
+}
+function dueInfoSrv(tk, t, bookings, today) {
+  const vs = bookings.filter((b) => b.tkey === tk && b.type === "V" && b.team).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const fv = firstValOf(t);
+  if (!vs.length && !fv) return null;
+  const past = vs.filter((b) => b.date <= today), fut = vs.filter((b) => b.date > today);
+  let last = past.length ? past[past.length - 1].date : null; const next = fut.length ? fut[0].date : null;
+  if (fv && (!last || fv.date > last)) last = fv.date;
+  if (!last) return { state: "first", next };
+  const due = addDays(last, DUE_DAYS), days = daysBetween(today, due);
+  if (next && next >= addDays(last, 1)) return { state: "booked", last, due, days, next };
+  return { state: days < 0 ? "late" : days <= DUE_WARN ? "soon" : "ok", last, due, days };
+}
+const mailReady = () => !!(process.env.BREVO_API_KEY && process.env.MAIL_SENDER);
+const SITE_URL = () => (process.env.URL || process.env.SITE_URL || "https://monasfit-salud.netlify.app").replace(/\/$/, "");
+const fmtLong = (s) => { const [y, m, d] = parts(s); return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Madrid" }); };
+async function sendMail(to, name, subject, text) {
+  const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const html = "<div style=\"font-family:Arial,sans-serif;font-size:15px;color:#1b3550;max-width:560px\">" + text.split("\n\n").map((p) => "<p>" + esc(p).replace(/\n/g, "<br>") + "</p>").join("") + "</div>";
+  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST", headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text }),
+  });
+  if (!r.ok) throw new Error("Brevo " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200));
+}
+function dueMailText(name, i) {
+  const first = String(name || "").split(" ")[0];
+  const ahead = i.days >= 0
+    ? "Dentro de " + i.days + (i.days === 1 ? " día" : " días") + " (" + fmtLong(i.due) + ") te toca tu siguiente valoración en el proyecto MonasFIT Salud."
+    : "Tu siguiente valoración en el proyecto MonasFIT Salud ya toca desde el " + fmtLong(i.due) + ".";
+  return "Hola, " + first + ":\n\n" + ahead + " Se hace cada 4 semanas para seguir tu evolución.\n\nReserva tu cita en: " + SITE_URL() + "\n\nEntra con tu correo corporativo, abre «Reservar» y elige una franja libre.\n\nGracias,\nAula Ateca · IES Monastil";
+}
+async function mailTargets() {
+  const [teachers, bookings, emails] = await Promise.all([read("teachers"), read("bookings"), read("emails")]);
+  const today = madridNow().date, emOf = {};
+  Object.entries(emails.data || {}).forEach(([e, tk]) => { if (!emOf[tk]) emOf[tk] = e; });
+  const out = [];
+  for (const [tk, t] of Object.entries(teachers.data)) {
+    if (t.archived) continue;
+    const i = dueInfoSrv(tk, t, bookings.data, today);
+    if (i && (i.state === "soon" || i.state === "late")) out.push({ tk, name: t.name, email: emOf[tk] || "", info: i });
+  }
+  return out;
+}
+export async function mailReminders(force) {
+  if (!mailReady()) return { sent: 0, skipped: "sin configurar" };
+  const now = madridNow();
+  const st = (await store().get("mailstate", { type: "json" })) || { day: "", sent: {} };
+  if (!force && (st.day === now.date || now.min < Number(process.env.MAIL_HOUR || 8) * 60)) return { sent: 0 };
+  let sent = 0;
+  for (const x of await mailTargets()) {
+    if (!x.email || st.sent[x.tk] === x.info.due) continue;
+    try { await sendMail(x.email, x.name, "Recordatorio: tu próxima valoración MonasFIT Salud", dueMailText(x.name, x.info)); st.sent[x.tk] = x.info.due; sent++; } catch (e) { console.log("mail error", x.tk, String(e).slice(0, 160)); }
+  }
+  st.day = now.date;
+  await store().setJSON("mailstate", st);
+  return { sent };
+}
 export async function cronJob() {
   await runSweep();
   const nowMs = Date.now();
@@ -342,7 +411,9 @@ export async function cronJob() {
     });
   }
   await flushPush();
-  return { reminded: due.length };
+  let mailed = {};
+  try { mailed = await mailReminders(false); } catch (e) { console.log("mail cron", String(e).slice(0, 160)); }
+  return { reminded: due.length, mailed };
 }
 async function respond(req, b, admin) {
   const id = str(b && b.id, 40);
@@ -674,6 +745,22 @@ async function fichaRoutes(route, req, url, admin) {
       sum[tk] = c;
     }));
     return json({ sum, at: Date.now() });
+  }
+  if (route === "mail-status" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    const st = (await store().get("mailstate", { type: "json" })) || { day: "", sent: {} };
+    const tg = await mailTargets();
+    return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
+  }
+  if (route === "mail-test" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    if (!mailReady()) fail("Falta configurar BREVO_API_KEY y MAIL_SENDER en Netlify.");
+    const b = await readJson(req);
+    const to = str(b && b.to, 120).trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) fail("Escribe un correo válido.");
+    const demo = { days: 7, due: addDays(madridNow().date, 7) };
+    try { await sendMail(to, "", "PRUEBA · Recordatorio de valoración MonasFIT Salud", dueMailText("Profesor", demo)); } catch (e) { fail("No se pudo enviar: " + String(e.message || e).slice(0, 200)); }
+    return json({ ok: true });
   }
   if (route === "import-teachers" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador puede importar profesorado.");

@@ -1020,6 +1020,16 @@ function teamOptions(sel,withNone){
   for(var i=1;i<=TEAMS;i++)o+='<option value="'+i+'"'+(Number(sel)===i?" selected":"")+'>Equipo '+i+'</option>';
   return o;
 }
+function mailCard(){
+  var m=S.mailSt,h='<div class="card"><h3>Recordatorios por correo</h3><p class="muted small">Cada día a las 8:00 se envía un correo al profesor que está a 7 días o menos de su valoración de las 4 semanas (o que ya la tiene retrasada) y no tiene cita. Solo se manda uno por valoración.</p>';
+  if(!m)return h+'<button class="btn primary" data-act="mailLoad"'+(S.busy?" disabled":"")+'>Comprobar estado</button></div>';
+  h+=m.ready?'<div class="note ok">Conectado · remitente <strong>'+esc(m.sender)+'</strong></div>':'<div class="note">Sin conectar todavía: faltan las variables <b>BREVO_API_KEY</b> y <b>MAIL_SENDER</b> en Netlify.</div>';
+  h+='<div class="row" style="margin:.5rem 0"><input id="mail-to" data-keep type="email" placeholder="correo para la prueba" style="flex:1 1 12rem" autocomplete="off"><button class="btn" data-act="mailTest"'+((S.busy||!m.ready)?" disabled":"")+'>Enviar prueba</button> <button class="btn sm" data-act="mailLoad">Actualizar</button></div>';
+  var t=m.targets||[];
+  h+='<p class="small"><strong>'+t.length+'</strong> profesor'+(t.length===1?"":"es")+' en la ventana de aviso'+(m.lastDay?' · último envío: '+esc(shortDate(m.lastDay)):'')+'</p>';
+  t.forEach(function(x){h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(x.name)+'</strong><br><small class="muted">'+esc(x.email||"sin correo")+'</small></span><span class="due '+(x.sent?'due-booked':(x.email?'due-soon':'due-late'))+'">'+(x.sent?'✓ enviado':(x.email?(x.days<0?'retrasada':'en '+x.days+' d'):'sin correo'))+'</span></div>';});
+  return h+'</div>';
+}
 function docSumCard(){
   var h='<div class="card"><h3>Documentos de las valoraciones</h3><p class="muted small">Comprueba qué tiene subido cada profesor en su ficha: composición corporal, PAR-Q y prescripción. Solo salen los que ya tienen una primera valoración hecha.</p>';
   if(!S.docSum)return h+'<button class="btn primary" data-act="docSumLoad"'+(S.busy?" disabled":"")+'>Revisar fichas</button></div>';
@@ -1052,6 +1062,7 @@ function vAdmin(){
     html+='<div class="card"><h3>Altas nuevas</h3><p class="muted small">Profesorado que se ha unido por su cuenta en los últimos 30 días.</p>'+ns.map(function(k){var t=S.teachers[k];
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
+  html+=mailCard();
   html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
@@ -1637,6 +1648,8 @@ var actions={
       S.noRestore=true;
     },"Profesor añadido.");
   },
+  mailLoad:function(){run(async function(){S.mailSt=await api("mail-status");},"Estado actualizado.");},
+  mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
   docSumLoad:function(){run(async function(){var r=await api("fichas-resumen");S.docSum=r.sum;},"Fichas revisadas.");},
   docSumOnly:function(){S.docSumAll=!S.docSumAll;S.noRestore=true;render();},
   tNoVal:function(d){run(async function(){var t=S.teachers[d.k];if(t)delete t.needsVal;await saveColl("teachers");},"Listo: ya puede reservar entrenamientos.");},
