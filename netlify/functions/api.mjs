@@ -79,9 +79,9 @@ const tkeyOf = (n) =>
 const madridFmt = new Intl.DateTimeFormat("en-CA", {
   timeZone: "Europe/Madrid", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
 });
-function madridNow() {
+function madridNow(ms) {
   const p = {};
-  for (const x of madridFmt.formatToParts(new Date())) p[x.type] = x.value;
+  for (const x of madridFmt.formatToParts(ms ? new Date(ms) : new Date())) p[x.type] = x.value;
   return { date: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) };
 }
 const parts = (s) => s.split("-").map(Number);
@@ -402,7 +402,7 @@ async function getMailTpl() {
 function fillTpl(text, name, i) {
   const first = String(name || "").split(" ")[0];
   const dias = i.days + (i.days === 1 ? " día" : " días");
-  return String(text).replace(/\{nombre\}/g, first).replace(/\{dias\}/g, dias).replace(/\{fecha\}/g, fmtLong(i.due)).replace(/\{enlace\}/g, SITE_URL());
+  return String(text).replace(/\{nombre\}/g, first).replace(/\{dias\}/g, dias).replace(/\{fecha\}/g, fmtLong(i.due)).replace(/\{enlace\}/g, SITE_URL() + "/#reservar");
 }
 function dueMailText(name, i, tpl) {
   tpl = tpl || MAIL_DEFAULT;
@@ -506,6 +506,36 @@ async function sendWeekly(force) {
   if (!force) await store().setJSON("weeklystate", { day: now.date });
   return { sent: 1 };
 }
+/* ---------- Recordatorio el día anterior, a la misma hora de la cita ---------- */
+async function dayReminders() {
+  if (!mailReady()) return { sent: 0 };
+  const cfg = (await store().get("mailcfg", { type: "json" })) || {};
+  if (cfg.day === false) return { sent: 0 };
+  const now = madridNow();
+  const [bookings, emails] = await Promise.all([read("bookings"), read("emails")]);
+  const st = (await store().get("daystate", { type: "json" })) || { sent: {} };
+  const byTk = {};
+  for (const [e, tk] of Object.entries(emails.data)) byTk[tk] = e;
+  let sent = 0, dirty = false;
+  for (const id of Object.keys(st.sent)) if (st.sent[id] < now.date) { delete st.sent[id]; dirty = true; }
+  for (const b of bookings.data) {
+    if (st.sent[b.id] || b.date < now.date || !SLOT_START_MIN[b.slot] || !["V", "E"].includes(b.type)) continue;
+    if (b.type === "E" && cfg.dayE !== true) continue;
+    const prev = addDays(b.date, -1), start = SLOT_START_MIN[b.slot];
+    const ready = (now.date > prev && now.date < b.date) || (now.date === prev && now.min >= start) || (now.date === b.date && now.min < start - 30);
+    if (!ready) continue;
+    const c = madridNow(b.createdAt);
+    if (c.date > prev || (c.date === prev && c.min >= start)) { st.sent[b.id] = b.date; dirty = true; continue; } // reservada con menos de 24 h: ya recibió la confirmación
+    const to = byTk[b.tkey];
+    if (!to) continue;
+    const first = String(b.teacher || "").split(" ")[0];
+    const text = "Hola " + first + ",\n\nTe recordamos que mañana, " + fmtLong(b.date) + ", a las " + hhmm(start) + " tienes reservada tu cita en el Aula Ateca (IES Monastil):\n- " + TYPE_TXT[b.type] + "\n- Franja " + SLOT_TXT[b.slot] + "\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "/#reservar\n\nMonasFIT SALUD - IES MONASTIL";
+    try { await sendMail(to, b.teacher, "Mañana a las " + hhmm(start) + " · " + TYPE_TXT[b.type] + " · MonasFIT Salud", text, { kind: "recordatorio-cita" }); st.sent[b.id] = b.date; dirty = true; sent++; }
+    catch (e) { console.log("day reminder", b.id, String(e).slice(0, 160)); }
+  }
+  if (dirty) await store().setJSON("daystate", st);
+  return { sent };
+}
 /* ---------- Copias de seguridad ---------- */
 const backupStore = () => getStore({ name: "monasfit-backups", consistency: "strong" });
 const BACKUP_KEEP = 14;
@@ -566,12 +596,14 @@ export async function cronJob() {
   await flushPush();
   let mailed = {};
   try { mailed = await mailReminders(false); } catch (e) { console.log("mail cron", String(e).slice(0, 160)); }
+  let dayr = null;
+  try { dayr = await dayReminders(); } catch (e) { console.log("day cron", String(e).slice(0, 160)); }
   try { await pruneMailLog(); } catch {}
   let weekly = null;
   try { weekly = await sendWeekly(false); } catch (e) { console.log("weekly cron", String(e).slice(0, 160)); }
   let backed = null;
   try { backed = await autoBackup(); } catch (e) { console.log("backup cron", String(e).slice(0, 160)); }
-  return { reminded: due.length, mailed, weekly, backed };
+  return { reminded: due.length, mailed, dayr, weekly, backed };
 }
 async function respond(req, b, admin) {
   const id = str(b && b.id, 40);
@@ -678,7 +710,7 @@ function icsFor(b, cancel) {
 }
 async function bookingMail(kind, b, to, name) {
   try {
-    if (!mailReady() || !to || !b) return;
+    if (!mailReady() || !to || !b || b.type !== "V") return; // solo valoraciones: los entrenamientos no envían correo al reservar
     const cfg = (await store().get("mailcfg", { type: "json" })) || {};
     if (cfg.confirm === false) return;
     const first = String(name || b.teacher || "").split(" ")[0];
@@ -1002,7 +1034,7 @@ async function fichaRoutes(route, req, url, admin) {
     const tg = await mailTargets();
     const tpl = await getMailTpl();
     const mcfg = (await store().get("mailcfg", { type: "json" })) || {};
-    return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", confirm: mcfg.confirm !== false, tpl, defaults: MAIL_DEFAULT, lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
+    return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", confirm: mcfg.confirm !== false, day: mcfg.day !== false, dayE: mcfg.dayE === true, tpl, defaults: MAIL_DEFAULT, lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
   }
   if (route === "mail-log" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
@@ -1013,8 +1045,10 @@ async function fichaRoutes(route, req, url, admin) {
     const b = await readJson(req);
     const cfg = (await store().get("mailcfg", { type: "json" })) || {};
     if (b && typeof b.confirm === "boolean") cfg.confirm = b.confirm;
+    if (b && typeof b.day === "boolean") cfg.day = b.day;
+    if (b && typeof b.dayE === "boolean") cfg.dayE = b.dayE;
     await store().setJSON("mailcfg", cfg);
-    return json({ ok: true, confirm: cfg.confirm !== false });
+    return json({ ok: true, confirm: cfg.confirm !== false, day: cfg.day !== false, dayE: cfg.dayE === true });
   }
   if (route === "mail-tpl" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador.");
