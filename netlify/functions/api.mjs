@@ -356,8 +356,8 @@ async function sendMail(to, name, subject, text) {
   const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const link = (x) => x.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#2459a8">$1</a>');
   let logo = "";
-  try { const lm = await store().get("logo.meta", { type: "json" }); if (lm) logo = "<p style=\"margin:0 0 14px\"><img src=\"" + SITE_URL() + "/api/logo?v=" + (lm.at || lm.updated || "1") + "\" alt=\"MonasFIT Salud\" width=\"96\" height=\"96\" style=\"display:block;border-radius:14px\"></p>"; } catch {}
-  const html = "<div style=\"font-family:Arial,sans-serif;font-size:15px;color:#1b3550;max-width:560px\">" + logo + text.split("\n\n").map((p) => "<p>" + link(esc(p).replace(/\n/g, "<br>")) + "</p>").join("") + "</div>";
+  try { const lm = await store().get("logo.meta", { type: "json" }); if (lm) logo = "<p style=\"margin:18px 0 0\"><img src=\"" + SITE_URL() + "/api/logo?v=" + (lm.at || lm.updated || "1") + "\" alt=\"MonasFIT Salud\" width=\"96\" height=\"96\" style=\"display:block;border-radius:14px\"></p>"; } catch {}
+  const html = "<div style=\"font-family:Arial,sans-serif;font-size:15px;color:#1b3550;max-width:560px\">" + text.split("\n\n").map((p) => "<p>" + link(esc(p).replace(/\n/g, "<br>")) + "</p>").join("") + logo + "</div>";
   const r = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST", headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text }),
