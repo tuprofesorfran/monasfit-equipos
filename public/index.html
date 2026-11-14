@@ -1131,6 +1131,7 @@ function vAdmin(){
   return html;
 }
 /* ---------- Reservar (profesorado) ---------- */
+function weekRef(){var t=todayStr(),w=new Date().getDay();if(w===6)return addDays(t,2);if(w===0)return addDays(t,1);if(w===5&&nowMin()>=13*60+55)return addDays(t,3);return t;}
 function mondayOf(s){var p=s.split("-").map(Number);var w=new Date(p[0],p[1]-1,p[2]).getDay();return addDays(s,w===0?-6:1-w);}
 function nowMin(){var d=new Date();return d.getHours()*60+d.getMinutes();}
 function fmtDay(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{day:"numeric",month:"long"});}
@@ -1198,7 +1199,7 @@ function bookModal(st,today,last,tk){
 }
 function vReservar(){
   var st=S.settings||DEF_SET,today=todayStr(),last=addDays(today,st.horizon);
-  var base=mondayOf(addDays(today,S.weekOff*7));
+  var base=mondayOf(addDays(weekRef(),S.weekOff*7));
   var tk=S.emailMode?(S.email&&S.myTk?S.myTk:""):(S.name.trim().length>=2?tkeyOf(S.name):"");
   var html='<div class="rv-top"><h2>Reserva tu hora</h2><div class="wk"><button class="btn sm" data-act="wkPrev" aria-label="Semana anterior"'+(S.weekOff>0?"":" disabled")+'>←</button><strong class="wkt">'+esc(wkShort(base))+'</strong>'+
     '<button class="btn sm" data-act="wkNext" aria-label="Semana siguiente"'+(addDays(base,7)<=last?"":" disabled")+'>→</button></div></div>';
@@ -1733,7 +1734,7 @@ var changes={
     if(!on)return;on=false;
     var t=e.changedTouches[0],dx=t.clientX-sx,dy=t.clientY-sy;
     if(Math.abs(dx)<50||Math.abs(dx)<Math.abs(dy)*1.5||Date.now()-st0>700)return;
-    var stg=S.settings||DEF_SET,td=todayStr(),last=addDays(td,stg.horizon),base=mondayOf(addDays(td,S.weekOff*7));
+    var stg=S.settings||DEF_SET,td=todayStr(),last=addDays(td,stg.horizon),base=mondayOf(addDays(weekRef(),S.weekOff*7));
     if(dx<0){if(addDays(base,7)<=last)actions.wkNext();}
     else if(S.weekOff>0)actions.wkPrev();
     S.swiped=Date.now();
