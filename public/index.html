@@ -79,6 +79,7 @@ main{padding-top:1rem}
 input,select,textarea,button{font:inherit;color:inherit}
 input,select,textarea{width:100%;font-size:16px;padding:.55rem .65rem;border:1.5px solid var(--field-line);border-radius:8px;background:var(--surface);min-width:0}
 textarea{resize:vertical;line-height:1.45}
+.mailtpl{margin:.6rem 0;padding:.5rem .7rem;border:1.5px solid var(--field-line);border-radius:10px}.mailtpl summary{cursor:pointer}.mailtpl label{display:block;margin:.6rem 0 .2rem}.mailtpl code{background:var(--surface);padding:0 .25rem;border-radius:4px}
 label{display:block;font-size:.82rem;font-weight:600;margin:.7rem 0 .25rem}
 select{width:auto;max-width:100%}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
@@ -1025,6 +1026,15 @@ function mailCard(){
   if(!m)return h+'<button class="btn primary" data-act="mailLoad"'+(S.busy?" disabled":"")+'>Comprobar estado</button></div>';
   h+=m.ready?'<div class="note ok">Conectado · remitente <strong>'+esc(m.sender)+'</strong></div>':'<div class="note">Sin conectar todavía: faltan las variables <b>BREVO_API_KEY</b> y <b>MAIL_SENDER</b> en Netlify.</div>';
   h+='<div class="row" style="margin:.5rem 0"><input id="mail-to" data-keep type="email" placeholder="correo para la prueba" style="flex:1 1 12rem" autocomplete="off"><button class="btn" data-act="mailTest"'+((S.busy||!m.ready)?" disabled":"")+'>Enviar prueba</button> <button class="btn sm" data-act="mailLoad">Actualizar</button></div>';
+  if(m.tpl){var tp=m.tpl;
+    h+='<details class="mailtpl"'+(S.mailTplOpen?' open':'')+' data-keep-open><summary><strong>Texto del correo</strong>'+(tp.custom?' · personalizado':' · por defecto')+'</summary>'
+      +'<p class="muted small">Puedes usar estos marcadores, que se rellenan solos para cada profesor: <code>{nombre}</code> (solo el nombre de pila), <code>{dias}</code> (p. ej. «7 días»), <code>{fecha}</code> (p. ej. «lunes 16 de noviembre») y <code>{enlace}</code> (la dirección de la app).</p>'
+      +'<label class="small"><strong>Asunto</strong></label><input id="mt-subject" data-keep type="text" maxlength="150" value="'+esc(tp.subject)+'" style="width:100%">'
+      +'<label class="small"><strong>Mensaje cuando faltan días</strong></label><textarea id="mt-soon" data-keep rows="11" style="width:100%">'+esc(tp.soon)+'</textarea>'
+      +'<label class="small"><strong>Mensaje cuando ya toca o va con retraso</strong></label><textarea id="mt-late" data-keep rows="11" style="width:100%">'+esc(tp.late)+'</textarea>'
+      +'<div class="row" style="margin:.4rem 0"><button class="btn primary" data-act="mailTplSave"'+(S.busy?' disabled':'')+'>Guardar texto</button> <button class="btn sm" data-act="mailTplReset"'+(S.busy?' disabled':'')+'>Volver al texto por defecto</button></div>'
+      +'<p class="muted small">Después de guardar, pulsa «Enviar prueba» para ver cómo queda.</p></details>';
+  }
   var t=m.targets||[];
   h+='<p class="small"><strong>'+t.length+'</strong> profesor'+(t.length===1?"":"es")+' en la ventana de aviso'+(m.lastDay?' · último envío: '+esc(shortDate(m.lastDay)):'')+'</p>';
   t.forEach(function(x){h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(x.name)+'</strong><br><small class="muted">'+esc(x.email||"sin correo")+'</small></span><span class="due '+(x.sent?'due-booked':(x.email?'due-soon':'due-late'))+'">'+(x.sent?'✓ enviado':(x.email?(x.days<0?'retrasada':'en '+x.days+' d'):'sin correo'))+'</span></div>';});
@@ -1649,6 +1659,8 @@ var actions={
     },"Profesor añadido.");
   },
   mailLoad:function(){run(async function(){S.mailSt=await api("mail-status");},"Estado actualizado.");},
+  mailTplSave:function(){var g=function(i){var e=document.getElementById(i);return e?e.value:"";};S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{subject:g("mt-subject"),soon:g("mt-soon"),late:g("mt-late")}});S.mailSt.tpl=r.tpl;},"Texto del correo guardado.");},
+  mailTplReset:function(){S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{reset:true}});S.mailSt.tpl=r.tpl;},"Restaurado el texto por defecto.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
   docSumLoad:function(){run(async function(){var r=await api("fichas-resumen");S.docSum=r.sum;},"Fichas revisadas.");},
   docSumOnly:function(){S.docSumAll=!S.docSumAll;S.noRestore=true;render();},
@@ -1732,6 +1744,7 @@ $app.addEventListener("click",function(e){
   if(b.classList.contains("sheet-bg")&&e.target!==b)return;
   var f=actions[b.dataset.act];if(f)f(b.dataset);
 });
+document.addEventListener("toggle",function(e){if(e.target&&e.target.classList&&e.target.classList.contains("mailtpl"))S.mailTplOpen=e.target.open;},true);
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;if(S.atecaOpen){S.atecaOpen=false;S.noRestore=true;render();}else if(S.aboutOpen){S.aboutOpen=false;S.noRestore=true;render();}else if(S.rankOpen){S.rankOpen=false;S.noRestore=true;render();}else if(S.confirmBook){S.confirmBook=null;render();}});
 $app.addEventListener("change",function(e){
   var el=e.target;if(!el.dataset||!el.dataset.change)return;
