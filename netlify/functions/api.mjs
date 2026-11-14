@@ -352,17 +352,42 @@ function dueInfoSrv(tk, t, bookings, today) {
 const mailReady = () => !!(process.env.BREVO_API_KEY && process.env.MAIL_SENDER);
 const SITE_URL = () => (process.env.URL || process.env.SITE_URL || "https://monasfit-salud.netlify.app").replace(/\/$/, "");
 const fmtLong = (s) => { const [y, m, d] = parts(s); return new Date(Date.UTC(y, m - 1, d, 12)).toLocaleDateString("es-ES", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Madrid" }).replace(",", ""); };
-async function sendMail(to, name, subject, text) {
+/* ---------- Historial de correos enviados ---------- */
+const MAILLOG_KEEP = 400;
+async function logMail(e) {
+  try {
+    const t = Date.now();
+    await store().setJSON("maillog/" + String(t).padStart(14, "0") + "-" + randomBytes(3).toString("hex"), { at: t, to: e.to, name: e.name, kind: e.kind, subject: String(e.subject || "").slice(0, 140), ok: !!e.ok, err: e.err || "" });
+  } catch {}
+}
+async function readMailLog(limit) {
+  const { blobs } = await store().list({ prefix: "maillog/" });
+  const keys = blobs.map((b) => b.key).sort().reverse();
+  const items = (await Promise.all(keys.slice(0, limit).map((k) => store().get(k, { type: "json" }).catch(() => null)))).filter(Boolean);
+  return { items, total: keys.length };
+}
+async function pruneMailLog() {
+  const { blobs } = await store().list({ prefix: "maillog/" });
+  const keys = blobs.map((b) => b.key).sort();
+  for (const k of keys.slice(0, Math.max(0, keys.length - MAILLOG_KEEP))) { try { await store().delete(k); } catch {} }
+}
+async function sendMail(to, name, subject, text, opts) {
   const esc = (x) => String(x).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
   const link = (x) => x.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color:#2459a8">$1</a>');
   let logo = "";
   try { const lm = await store().get("logo.meta", { type: "json" }); if (lm) logo = "<p style=\"margin:18px 0 0\"><img src=\"" + SITE_URL() + "/api/logo?v=" + (lm.at || lm.updated || "1") + "\" alt=\"MonasFIT Salud\" width=\"96\" height=\"96\" style=\"display:block;border-radius:14px\"></p>"; } catch {}
   const html = "<div style=\"font-family:Arial,sans-serif;font-size:15px;color:#1b3550;max-width:560px\">" + text.split("\n\n").map((p) => "<p>" + link(esc(p).replace(/\n/g, "<br>")) + "</p>").join("") + logo + "</div>";
-  const r = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST", headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text }),
-  });
-  if (!r.ok) throw new Error("Brevo " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200));
+  const kind = (opts && opts.kind) || "otro";
+  let r, err = "";
+  try {
+    r = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST", headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text, ...(opts && opts.ics ? { attachment: [{ name: opts.icsName || "cita.ics", content: Buffer.from(opts.ics, "utf8").toString("base64") }] } : {}) }),
+    });
+    if (!r.ok) err = "Brevo " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200);
+  } catch (e) { err = String(e.message || e).slice(0, 200); }
+  await logMail({ to, name: name || "", kind, subject, ok: !err, err });
+  if (err) throw new Error(err);
 }
 const MAIL_TAIL = "\n\nSelecciona el día, Introduce tu correo corporativo, selecciona VALORACIÓN y pulsa RESERVAR VALORACIÓN.\n\nGracias.\n\nMonasFIT SALUD - IES MONASTIL\n\nEl primer paso hacia tu salud es conocerte ¡Reserva tu valoración!";
 const MAIL_DEFAULT = {
@@ -404,7 +429,7 @@ export async function mailReminders(force) {
   const tpl = await getMailTpl();
   for (const x of await mailTargets()) {
     if (!x.email || st.sent[x.tk] === x.info.due) continue;
-    try { await sendMail(x.email, x.name, fillTpl(tpl.subject, x.name, x.info), dueMailText(x.name, x.info, tpl)); st.sent[x.tk] = x.info.due; sent++; } catch (e) { console.log("mail error", x.tk, String(e).slice(0, 160)); }
+    try { await sendMail(x.email, x.name, fillTpl(tpl.subject, x.name, x.info), dueMailText(x.name, x.info, tpl), { kind: "recordatorio" }); st.sent[x.tk] = x.info.due; sent++; } catch (e) { console.log("mail error", x.tk, String(e).slice(0, 160)); }
   }
   st.day = now.date;
   await store().setJSON("mailstate", st);
@@ -460,10 +485,10 @@ async function weeklyReport() {
   const late = tg.filter((x) => x.info.days < 0).sort((x, y) => x.info.days - y.info.days);
   const soon = tg.filter((x) => x.info.days >= 0).sort((x, y) => x.info.days - y.info.days);
   blocks.push("VALORACIONES RETRASADAS" + (late.length ? " (" + late.length + ")\n" + late.map((x) => "- " + x.name + ": tocaba el " + fmtLong(x.info.due)).join("\n") : "\nNinguna."));
-  blocks.push("VALORACIONES QUE TOCAN ESTA SEMANA O LA PRÓXIMA" + (soon.length ? " (" + soon.length + ")\n" + soon.map((x) => "- " + x.name + ": " + fmtLong(x.info.due) + " (en " + x.info.days + " d)").join("\n") : "\nNinguna."));
+  blocks.push("VALORACIONES QUE TOCAN EN LOS PRÓXIMOS 7 DÍAS" + (soon.length ? " (" + soon.length + ")\n" + soon.map((x) => "- " + x.name + ": " + fmtLong(x.info.due) + " (en " + x.info.days + " d)").join("\n") : "\nNinguna."));
   const end = addDays(today, 6);
   const pend = bookings.data.filter((b) => b.date >= today && b.date <= end && b.conf === "pending" && b.team).sort((x, y) => (x.date + x.slot < y.date + y.slot ? -1 : 1));
-  blocks.push("CITAS DE ESTA SEMANA SIN CONFIRMAR POR EL EQUIPO" + (pend.length ? " (" + pend.length + ")\n" + pend.map((b) => "- " + b.teacher + " · " + fmtLong(b.date) + " " + hhmm(SLOT_START_MIN[b.slot]) + " · Equipo " + b.team).join("\n") : "\nNinguna."));
+  blocks.push("CITAS DE LOS PRÓXIMOS 7 DÍAS SIN CONFIRMAR POR EL EQUIPO" + (pend.length ? " (" + pend.length + ")\n" + pend.map((b) => "- " + b.teacher + " · " + fmtLong(b.date) + " " + hhmm(SLOT_START_MIN[b.slot]) + " · Equipo " + b.team).join("\n") : "\nNinguna."));
   const nomail = tg.filter((x) => !x.email);
   if (nomail.length) blocks.push("SIN CORREO REGISTRADO (no pueden recibir el recordatorio)\n" + nomail.map((x) => "- " + x.name).join("\n"));
   const text = "Resumen semanal · MonasFIT Salud\n" + fmtLong(today) + "\n\n" + blocks.join("\n\n") + "\n\nEntra a Gestión: " + SITE_URL() + "/#gestion";
@@ -475,16 +500,16 @@ async function sendWeekly(force) {
   if (!cfg.to) return { sent: 0, skipped: "sin destinatario" };
   const now = madridNow();
   const st = (await store().get("weeklystate", { type: "json" })) || {};
-  if (!force && (dow(now.date) !== 1 || now.min < 450 || st.day === now.date)) return { sent: 0 };
+  if (!force && (dow(now.date) !== 0 || now.min < 540 || st.day === now.date)) return { sent: 0 };
   const r = await weeklyReport();
-  await sendMail(cfg.to, "", (force ? "PRUEBA · " : "") + r.subject, r.text);
+  await sendMail(cfg.to, "", (force ? "PRUEBA · " : "") + r.subject, r.text, { kind: force ? "prueba" : "resumen" });
   if (!force) await store().setJSON("weeklystate", { day: now.date });
   return { sent: 1 };
 }
 /* ---------- Copias de seguridad ---------- */
 const backupStore = () => getStore({ name: "monasfit-backups", consistency: "strong" });
 const BACKUP_KEEP = 14;
-const BACKUP_SKIP = (k) => k === "lock" || k === "logo" || k === "logo.meta" || /^(docs|tokens|push|backup)\//.test(k);
+const BACKUP_SKIP = (k) => k === "lock" || k === "logo" || k === "logo.meta" || /^(docs|tokens|push|backup|maillog)\//.test(k);
 async function makeBackup(tag) {
   const s = store();
   const { blobs } = await s.list();
@@ -541,6 +566,7 @@ export async function cronJob() {
   await flushPush();
   let mailed = {};
   try { mailed = await mailReminders(false); } catch (e) { console.log("mail cron", String(e).slice(0, 160)); }
+  try { await pruneMailLog(); } catch {}
   let weekly = null;
   try { weekly = await sendWeekly(false); } catch (e) { console.log("weekly cron", String(e).slice(0, 160)); }
   let backed = null;
@@ -629,6 +655,41 @@ function rateTeams(t, tkey, bookings) {
 }
 
 /* ---------- Reservar y cancelar (profesorado) ---------- */
+/* ---------- Correo al reservar / cancelar, con la cita para el calendario ---------- */
+const SLOT_TXT = [null, "7:55–8:50", "8:50–9:45", "9:45–10:40", "11:10–12:05", "12:05–13:00", "13:00–13:55"];
+const TYPE_TXT = { V: "Valoración corporal", E: "Entrenamiento guiado" };
+function icsFor(b, cancel) {
+  const ymd = b.date.replace(/-/g, "");
+  const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + String(m % 60).padStart(2, "0") + "00";
+  const st = SLOT_START_MIN[b.slot];
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MonasFIT Salud//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    "BEGIN:VTIMEZONE", "TZID:Europe/Madrid",
+    "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST", "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
+    "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET", "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
+    "END:VTIMEZONE", "BEGIN:VEVENT", "UID:" + b.id + "@monasfit-salud", "DTSTAMP:" + stamp, "SEQUENCE:" + (cancel ? 1 : 0),
+    "DTSTART;TZID=Europe/Madrid:" + ymd + "T" + hm(st), "DTEND;TZID=Europe/Madrid:" + ymd + "T" + hm(st + 55),
+    "SUMMARY:" + (cancel ? "CANCELADA · " : "") + "MonasFIT Salud · " + TYPE_TXT[b.type],
+    "LOCATION:Aula Ateca · IES Monastil", "DESCRIPTION:" + TYPE_TXT[b.type] + " en el proyecto MonasFIT Salud.",
+    "STATUS:" + (cancel ? "CANCELLED" : "CONFIRMED")];
+  if (!cancel) L.push("BEGIN:VALARM", "TRIGGER:-PT60M", "ACTION:DISPLAY", "DESCRIPTION:MonasFIT Salud en 1 hora", "END:VALARM");
+  L.push("END:VEVENT", "END:VCALENDAR");
+  return L.join("\r\n") + "\r\n";
+}
+async function bookingMail(kind, b, to, name) {
+  try {
+    if (!mailReady() || !to || !b) return;
+    const cfg = (await store().get("mailcfg", { type: "json" })) || {};
+    if (cfg.confirm === false) return;
+    const first = String(name || b.teacher || "").split(" ")[0];
+    const cancel = kind === "cancel";
+    const quando = fmtLong(b.date) + ", " + SLOT_TXT[b.slot];
+    const text = cancel
+      ? "Hola " + first + ",\n\nTu reserva queda cancelada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n\nSi quieres otra hora, puedes reservarla aquí: " + SITE_URL() + "\n\nMonasFIT SALUD - IES MONASTIL"
+      : "Hola " + first + ",\n\nTu reserva está registrada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n- Lugar: Aula Ateca (IES Monastil)\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "\n\nAdjuntamos un archivo para añadirla a tu calendario.\n\nMonasFIT SALUD - IES MONASTIL";
+    await sendMail(to, name || b.teacher, (cancel ? "Reserva cancelada · " : "Reserva registrada · ") + TYPE_TXT[b.type] + " · " + fmtLong(b.date), text, { ics: icsFor(b, cancel), icsName: cancel ? "cita-cancelada.ics" : "cita-monasfit.ics", kind: cancel ? "cancelacion" : "reserva" });
+  } catch (e) { console.log("booking mail", String(e).slice(0, 160)); }
+}
 async function book(b) {
   const type = b && b.type;
   const date = str(b && b.date, 10);
@@ -637,7 +698,8 @@ async function book(b) {
   if (!validDate(date) || !slot) fail("Fecha o franja no válida.");
 
   await runSweep();
-  return withLock(async () => {
+  let mailTo = "";
+  const res = await withLock(async () => {
     const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
     // Con correos registrados, quien reserva se identifica con su correo corporativo.
     const emails = await read("emails");
@@ -645,6 +707,7 @@ async function book(b) {
     if (Object.keys(emails.data).length) {
       const em = normEmail(b && b.email);
       if (!em || !EMAIL_RE.test(em) || em.length > 120) fail("Escribe tu correo corporativo completo.");
+      mailTo = em;
       tk = emails.data[em];
       if (tk && teachers.data[tk]) name = teachers.data[tk].name;
       else {
@@ -722,13 +785,16 @@ async function book(b) {
     const tm = teams.data[nb.team];
     return { ok: true, token, booking: nb, members: (tm && tm.members) || "" };
   });
+  await bookingMail("book", res.booking, mailTo, res.booking.teacher);
+  return res;
 }
 
 async function cancel(b) {
   const id = str(b && b.id, 40);
   const token = str(b && b.token, 100);
   if (!id || !token) fail("Falta la reserva.");
-  return withLock(async () => {
+  let gone = null, goneTo = "";
+  const res = await withLock(async () => {
     const rec = await store().get("tokens/" + id, { type: "json" });
     if (!rec || !rec.h || !timingSafeEqual(Buffer.from(rec.h), Buffer.from(digest(token).toString("hex"))))
       fail("No puedes cancelar esta reserva desde este dispositivo. Pide ayuda al coordinador.");
@@ -736,6 +802,8 @@ async function cancel(b) {
     const bk = bookings.data.find((x) => x.id === id);
     if (!bk) fail("Esa reserva ya no existe.");
     if (bk.date < madridNow().date) fail("No se pueden cancelar reservas pasadas.");
+    gone = bk;
+    try { const em = await read("emails"); goneTo = Object.keys(em.data).find((e) => em.data[e] === bk.tkey) || ""; } catch {}
     const rest = bookings.data.filter((x) => x.id !== id);
     await write("bookings", bookings, rest);
     if (bk.type === "V" && !rest.some((x) => x.tkey === bk.tkey && x.type === "V")) {
@@ -750,6 +818,8 @@ async function cancel(b) {
     await store().delete("tokens/" + id);
     return { ok: true };
   });
+  await bookingMail("cancel", gone, goneTo, gone && gone.teacher);
+  return res;
 }
 
 /* ---------- Fichas personales del profesorado (clave propia) ---------- */
@@ -931,7 +1001,20 @@ async function fichaRoutes(route, req, url, admin) {
     const st = (await store().get("mailstate", { type: "json" })) || { day: "", sent: {} };
     const tg = await mailTargets();
     const tpl = await getMailTpl();
-    return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", tpl, defaults: MAIL_DEFAULT, lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
+    const mcfg = (await store().get("mailcfg", { type: "json" })) || {};
+    return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", confirm: mcfg.confirm !== false, tpl, defaults: MAIL_DEFAULT, lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
+  }
+  if (route === "mail-log" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    return json(await readMailLog(150));
+  }
+  if (route === "mail-cfg" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const cfg = (await store().get("mailcfg", { type: "json" })) || {};
+    if (b && typeof b.confirm === "boolean") cfg.confirm = b.confirm;
+    await store().setJSON("mailcfg", cfg);
+    return json({ ok: true, confirm: cfg.confirm !== false });
   }
   if (route === "mail-tpl" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador.");
@@ -950,7 +1033,7 @@ async function fichaRoutes(route, req, url, admin) {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) fail("Escribe un correo válido.");
     const demo = { days: 7, due: addDays(madridNow().date, 7) };
     const tpl = await getMailTpl();
-    try { await sendMail(to, "", "PRUEBA · " + fillTpl(tpl.subject, "Profesor", demo), dueMailText("Profesor", demo, tpl)); } catch (e) { fail("No se pudo enviar: " + String(e.message || e).slice(0, 200)); }
+    try { await sendMail(to, "", "PRUEBA · " + fillTpl(tpl.subject, "Profesor", demo), dueMailText("Profesor", demo, tpl), { kind: "prueba" }); } catch (e) { fail("No se pudo enviar: " + String(e.message || e).slice(0, 200)); }
     return json({ ok: true });
   }
   if (route === "import-teachers" && req.method === "POST") {

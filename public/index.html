@@ -1026,6 +1026,7 @@ function mailCard(){
   if(!m)return h+'<button class="btn primary" data-act="mailLoad"'+(S.busy?" disabled":"")+'>Comprobar estado</button></div>';
   h+=m.ready?'<div class="note ok">Conectado · remitente <strong>'+esc(m.sender)+'</strong></div>':'<div class="note">Sin conectar todavía: faltan las variables <b>BREVO_API_KEY</b> y <b>MAIL_SENDER</b> en Netlify.</div>';
   h+='<div class="row" style="margin:.5rem 0"><input id="mail-to" data-keep type="email" placeholder="correo para la prueba" style="flex:1 1 12rem" autocomplete="off"><button class="btn" data-act="mailTest"'+((S.busy||!m.ready)?" disabled":"")+'>Enviar prueba</button> <button class="btn sm" data-act="mailLoad">Actualizar</button></div>';
+  h+='<div class="row" style="margin:.4rem 0;align-items:center;gap:.5rem"><span class="small" style="flex:1 1 14rem"><strong>Correo al reservar o cancelar</strong><br><span class="muted">Al reservar o cancelar una cita, el profesor recibe un correo con la fecha, la hora y un archivo para añadirla a su calendario.</span></span><button class="btn sm'+(m.confirm?' primary':'')+'" data-act="mailCfgToggle"'+(S.busy?' disabled':'')+'>'+(m.confirm?'Activado':'Desactivado')+'</button></div>';
   if(m.tpl){var tp=m.tpl;
     h+='<details class="mailtpl"'+(S.mailTplOpen?' open':'')+' data-keep-open><summary><strong>Texto del correo</strong>'+(tp.custom?' · personalizado':' · por defecto')+'</summary>'
       +'<p class="muted small">Puedes usar estos marcadores, que se rellenan solos para cada profesor: <code>{nombre}</code> (solo el nombre de pila), <code>{dias}</code> (p. ej. «7 días»), <code>{fecha}</code> (p. ej. «lunes 16 de noviembre») y <code>{enlace}</code> (la dirección de la app).</p>'
@@ -1035,13 +1036,29 @@ function mailCard(){
       +'<div class="row" style="margin:.4rem 0"><button class="btn primary" data-act="mailTplSave"'+(S.busy?' disabled':'')+'>Guardar texto</button> <button class="btn sm" data-act="mailTplReset"'+(S.busy?' disabled':'')+'>Volver al texto por defecto</button></div>'
       +'<p class="muted small">Después de guardar, pulsa «Enviar prueba» para ver cómo queda.</p></details>';
   }
+  h+=mailLogCard();
   var t=m.targets||[];
   h+='<p class="small"><strong>'+t.length+'</strong> profesor'+(t.length===1?"":"es")+' en la ventana de aviso'+(m.lastDay?' · último envío: '+esc(shortDate(m.lastDay)):'')+'</p>';
   t.forEach(function(x){h+='<div class="list-row" style="flex-wrap:wrap;gap:.3rem"><span style="flex:1 1 12rem"><strong>'+esc(x.name)+'</strong><br><small class="muted">'+esc(x.email||"sin correo")+'</small></span><span class="due '+(x.sent?'due-booked':(x.email?'due-soon':'due-late'))+'">'+(x.sent?'✓ enviado':(x.email?(x.days<0?'retrasada':'en '+x.days+' d'):'sin correo'))+'</span></div>';});
   return h+'</div>';
 }
+function normS(x){return String(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();}
+function mailLogCard(){
+  var L=S.mailLog,KL={recordatorio:"Recordatorio 4 semanas",reserva:"Reserva",cancelacion:"Cancelación",resumen:"Resumen semanal",prueba:"Prueba",otro:"Otro"};
+  var h='<details class="mailtpl"'+(S.mailLogOpen?' open':'')+'><summary><strong>Historial de correos enviados</strong></summary>';
+  if(!L)return h+'<p class="muted small">Todos los correos que ha enviado la aplicación: recordatorios, reservas, cancelaciones y resúmenes.</p><button class="btn primary" data-act="mailLogLoad"'+(S.busy?' disabled':'')+'>Ver historial</button></details>';
+  var q=normS(S.mailLogQ||""),it=L.items.filter(function(e){return !q||normS(e.name+" "+e.to+" "+(KL[e.kind]||e.kind)).indexOf(q)>=0;});
+  h+='<div class="row" style="margin:.4rem 0"><input id="ml-q" data-keep type="search" placeholder="Buscar profesor o correo" value="'+esc(S.mailLogQ||"")+'" style="flex:1 1 11rem" autocomplete="off"><button class="btn sm" data-act="mailLogFilter">Buscar</button><button class="btn sm" data-act="mailLogLoad">Actualizar</button></div>';
+  h+='<p class="muted small">'+it.length+' de '+L.items.length+' mostrados · '+L.total+' guardados (se conservan los últimos 400).</p>';
+  if(!it.length)h+='<p class="muted small">No hay correos que coincidan.</p>';
+  it.forEach(function(e){
+    var d=new Date(e.at).toLocaleString("es-ES",{timeZone:"Europe/Madrid",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+    h+='<div class="list-row" style="gap:.4rem;align-items:flex-start"><span style="flex:1 1 auto;min-width:0"><strong>'+esc(e.name||e.to)+'</strong> <small class="muted">'+esc(KL[e.kind]||e.kind)+'</small><br><small class="muted">'+esc(d)+' · '+esc(e.to)+(e.ok?'':' · <b style="color:var(--danger,#b3261e)">'+esc(e.err||"Error")+'</b>')+'</small></span><span title="'+(e.ok?"Enviado":"Error")+'">'+(e.ok?"✓":"✗")+'</span></div>';
+  });
+  return h+'</details>';
+}
 function weeklyCard(){
-  var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada lunes a las 7:30 se envía a tu correo un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de la semana sin confirmar y profesorado sin correo registrado.</p>';
+  var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada domingo a las 9:00 se envía a tu correo un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de los próximos 7 días sin confirmar y profesorado sin correo registrado.</p>';
   if(!w)return h+'<button class="btn primary" data-act="weeklyLoad"'+(S.busy?" disabled":"")+'>Configurar</button></div>';
   h+='<label for="wk-to" class="small"><strong>Correo de destino</strong></label><div class="row" style="margin:.2rem 0 .5rem"><input id="wk-to" data-keep type="email" value="'+esc(w.to||"")+'" placeholder="tu correo corporativo" style="flex:1 1 12rem" autocomplete="off"><button class="btn primary" data-act="weeklySave"'+(S.busy?" disabled":"")+'>Guardar</button></div>';
   h+='<div class="row"><button class="btn" data-act="weeklySend"'+((S.busy||!w.to||!w.ready)?" disabled":"")+'>Enviar uno ahora (prueba)</button></div>';
@@ -1685,6 +1702,9 @@ var actions={
   mailLoad:function(){run(async function(){S.mailSt=await api("mail-status");},"Estado actualizado.");},
   mailTplSave:function(){var g=function(i){var e=document.getElementById(i);return e?e.value:"";};S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{subject:g("mt-subject"),soon:g("mt-soon"),late:g("mt-late")}});S.mailSt.tpl=r.tpl;},"Texto del correo guardado.");},
   mailTplReset:function(){S.mailTplOpen=true;run(async function(){var r=await api("mail-tpl",{method:"POST",body:{reset:true}});S.mailSt.tpl=r.tpl;},"Restaurado el texto por defecto.");},
+  mailLogLoad:function(){S.mailLogOpen=true;run(async function(){S.mailLog=await api("mail-log");},"");},
+  mailLogFilter:function(){var el=document.getElementById("ml-q");S.mailLogQ=el?el.value:"";S.mailLogOpen=true;render();},
+  mailCfgToggle:function(){var nv=!(S.mailSt&&S.mailSt.confirm);run(async function(){var r=await api("mail-cfg",{method:"POST",body:{confirm:nv}});S.mailSt.confirm=r.confirm;},nv?"Correo al reservar activado.":"Correo al reservar desactivado.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
   weeklyLoad:function(){run(async function(){S.weekly=await api("weekly-get");},"");},
   weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada lunes.":"Guardado: sin envío semanal.");},
@@ -1783,7 +1803,7 @@ $app.addEventListener("click",function(e){
   if(b.classList.contains("sheet-bg")&&e.target!==b)return;
   var f=actions[b.dataset.act];if(f)f(b.dataset);
 });
-document.addEventListener("toggle",function(e){if(e.target&&e.target.classList&&e.target.classList.contains("mailtpl"))S.mailTplOpen=e.target.open;},true);
+document.addEventListener("toggle",function(e){if(e.target&&e.target.classList&&e.target.classList.contains("mailtpl")){if(e.target.querySelector("#ml-q,[data-act=mailLogLoad]"))S.mailLogOpen=e.target.open;else S.mailTplOpen=e.target.open;}},true);
 document.addEventListener("keydown",function(e){if(e.key!=="Escape")return;if(S.atecaOpen){S.atecaOpen=false;S.noRestore=true;render();}else if(S.aboutOpen){S.aboutOpen=false;S.noRestore=true;render();}else if(S.rankOpen){S.rankOpen=false;S.noRestore=true;render();}else if(S.confirmBook){S.confirmBook=null;render();}});
 $app.addEventListener("change",function(e){
   var el=e.target;if(!el.dataset||!el.dataset.change)return;
