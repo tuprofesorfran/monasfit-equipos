@@ -357,6 +357,13 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 :root[data-theme="dark"] .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
+
+/* v1.37.0 avisos */
+.notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
+.notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
+.notice h3{margin:0 0 .25rem;font-size:1.05rem}
+.notice p{margin:.2rem 0;line-height:1.45}
+.notice .row{margin-top:.5rem}
 </style>
 </head>
 <body>
@@ -447,7 +454,7 @@ async function refresh(){
   try{
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];
     if(!S.admin&&S.team&&S.teamKeysSet[S.team]&&!S.teamKeys[S.team]){S.askTeam=S.team;S.team=null;}
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
@@ -1059,6 +1066,33 @@ function mailLogCard(){
   });
   return h+'</details>';
 }
+function noticeSeen(n){try{var m=JSON.parse(lsGet("monasfit.notices")||"{}");return m[n.id]===n.at;}catch(e){return false;}}
+function vNotices(){
+  if(!S.loaded||S.needCode)return "";
+  return (S.notices||[]).filter(function(n){return n.state==="activo"&&!noticeSeen(n)&&!(S.tab==="gestion"&&S.admin);}).map(function(n){
+    var t=esc(n.text).replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
+    return '<section class="notice'+(n.level==="warn"?' warn':'')+'" role="note" aria-label="Aviso"><h3>'+(n.level==="warn"?'⚠️ ':'📣 ')+esc(n.title)+'</h3><p>'+t+'</p><div class="row"><button class="btn sm" data-act="noticeOk" data-id="'+esc(n.id)+'">Entendido</button></div></section>';
+  }).join("");
+}
+function noticeCard(){
+  var L=S.notices||[],f=S.noticeForm||{level:"warn"};
+  var h='<div class="card"><h3>Avisos para quien entra en la app</h3><p class="muted small">El aviso sale arriba del todo a cualquier persona que abra la aplicación (profesorado y equipos). Cada persona puede cerrarlo con «Entendido» y no le vuelve a salir, salvo que lo edites. Puedes programar desde qué día y hasta qué día se muestra.</p>';
+  if(!L.length)h+='<p class="muted small">No hay avisos.</p>';
+  L.forEach(function(n){
+    var est=n.state==="activo"?'<span class="tag on">Activo</span>':n.state==="programado"?'<span class="tag">Programado</span>':'<span class="tag">Caducado</span>';
+    h+='<div class="list-row" style="flex-wrap:wrap;gap:.4rem"><span style="flex:1 1 12rem;min-width:0"><strong>'+(n.level==="warn"?'⚠️ ':'📣 ')+esc(n.title)+'</strong> '+est+'<br><small class="muted">'+(n.from?'Desde '+esc(fmtDate(n.from)):'Desde ya')+' · '+(n.to?'hasta '+esc(fmtDate(n.to)):'sin fecha final')+'</small></span><span class="row">'
+      +'<button class="btn sm" data-act="noticeEdit" data-id="'+esc(n.id)+'">Editar</button>'
+      +(S.noticeDel===n.id?'<button class="btn sm danger" data-act="noticeDelYes" data-id="'+esc(n.id)+'">Borrar</button><button class="btn sm" data-act="noticeDelNo">No</button>':'<button class="btn sm" data-act="noticeDel" data-id="'+esc(n.id)+'">Borrar</button>')+'</span></div>';
+  });
+  h+='<h4 style="margin:1rem 0 .3rem">'+(f.id?'Editar aviso':'Nuevo aviso')+'</h4>'
+    +'<label for="nt-title" class="small"><strong>Título</strong></label><input id="nt-title" data-keep maxlength="120" style="width:100%" autocomplete="off" value="'+esc(f.title||"")+'">'
+    +'<label for="nt-text" class="small"><strong>Mensaje</strong></label><textarea id="nt-text" data-keep rows="5" maxlength="1500" style="width:100%">'+esc(f.text||"")+'</textarea>'
+    +'<div class="grid2"><div><label for="nt-level" class="small"><strong>Tipo</strong></label><select id="nt-level" data-keep><option value="warn"'+(f.level!=="info"?' selected':'')+'>⚠️ Importante (naranja)</option><option value="info"'+(f.level==="info"?' selected':'')+'>📣 Informativo (azul)</option></select></div><div></div>'
+    +'<div><label for="nt-from" class="small"><strong>Mostrar desde</strong> (opcional)</label><input id="nt-from" data-keep type="date" value="'+esc(f.from||"")+'"></div>'
+    +'<div><label for="nt-to" class="small"><strong>Hasta el</strong> (incluido, opcional)</label><input id="nt-to" data-keep type="date" value="'+esc(f.to||"")+'"></div></div>'
+    +'<div class="row" style="margin-top:.7rem"><button class="btn primary" data-act="noticeSave"'+(S.busy?' disabled':'')+'>'+(f.id?'Guardar cambios':'Publicar aviso')+'</button>'+(f.id?' <button class="btn sm" data-act="noticeNew">Cancelar edición</button>':'')+'</div></div>';
+  return h;
+}
 function weeklyCard(){
   var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada domingo a las 9:00 se envía a tu correo un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de los próximos 7 días sin confirmar y profesorado sin correo registrado.</p>';
   if(!w)return h+'<button class="btn primary" data-act="weeklyLoad"'+(S.busy?" disabled":"")+'>Configurar</button></div>';
@@ -1115,7 +1149,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=weeklyCard();html+=backupCard();html+=docSumCard();
+  html+=noticeCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1331,7 +1365,7 @@ function view(){
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
   return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">SALUD</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
     '</div><p class="credit credit-m">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p>'+
-    '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+banner()+body+'</main>'+foot+vFab()+'</div>';
+    '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+vNotices()+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
 function vAbout(){
   var st=[["1979","año de apertura"],["2006","instalaciones nuevas"],["+700","alumnos y alumnas"],["7 aulas","pabellón nuevo (2024)"]];
@@ -1710,6 +1744,17 @@ var actions={
   mailDayToggle:function(){var nv=!(S.mailSt&&S.mailSt.day);run(async function(){var r=await api("mail-cfg",{method:"POST",body:{day:nv}});S.mailSt.day=r.day;},nv?"Recordatorio del día anterior activado.":"Recordatorio del día anterior desactivado.");},
   mailDayEToggle:function(){var nv=!(S.mailSt&&S.mailSt.dayE);run(async function(){var r=await api("mail-cfg",{method:"POST",body:{dayE:nv}});S.mailSt.dayE=r.dayE;},nv?"Aviso en entrenamientos activado.":"Aviso en entrenamientos desactivado.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
+  noticeOk:function(d){var m={};try{m=JSON.parse(lsGet("monasfit.notices")||"{}");}catch(e){}var n=(S.notices||[]).filter(function(x){return x.id===d.id;})[0];if(n){m[n.id]=n.at;lsSet("monasfit.notices",JSON.stringify(m));}render();},
+  noticeEdit:function(d){var n=(S.notices||[]).filter(function(x){return x.id===d.id;})[0];if(!n)return;S.noticeForm={id:n.id,title:n.title,text:n.text,level:n.level,from:n.from,to:n.to};S.noRestore=true;render();var el=document.getElementById("nt-title");if(el)el.scrollIntoView({block:"center"});},
+  noticeNew:function(){S.noticeForm=null;S.noRestore=true;render();},
+  noticeDel:function(d){S.noticeDel=d.id;render();},
+  noticeDelNo:function(){S.noticeDel=null;render();},
+  noticeDelYes:function(d){var id=d.id;S.noticeDel=null;run(async function(){var r=await api("notice-del",{method:"POST",body:{id:id}});S.notices=r.notices;},"Aviso borrado.");},
+  noticeSave:function(){
+    var g=function(i){var e=document.getElementById(i);return e?e.value:"";},f=S.noticeForm||{};
+    var body={id:f.id||"",title:g("nt-title"),text:g("nt-text"),level:g("nt-level"),from:g("nt-from"),to:g("nt-to")};
+    run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
+  },
   weeklyLoad:function(){run(async function(){S.weekly=await api("weekly-get");},"");},
   weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada lunes.":"Guardado: sin envío semanal.");},
   weeklySend:function(){run(async function(){await api("weekly-send",{method:"POST",body:{}});},"Resumen de prueba enviado.");},

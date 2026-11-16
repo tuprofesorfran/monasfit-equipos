@@ -536,6 +536,24 @@ async function dayReminders() {
   if (dirty) await store().setJSON("daystate", st);
   return { sent };
 }
+/* ---------- Avisos para quien entra en la app ---------- */
+const NOTICE_MAX = 20;
+const isoDay = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(String(x || "")) ? String(x) : "");
+async function readNotices() {
+  const v = await store().get("notices", { type: "json" });
+  return Array.isArray(v) ? v : [];
+}
+function noticeState(n, today) {
+  if (n.from && today < n.from) return "programado";
+  if (n.to && today > n.to) return "caducado";
+  return "activo";
+}
+async function noticesFor(admin) {
+  const today = madridNow().date;
+  const all = await readNotices();
+  const out = all.map((n) => ({ ...n, state: noticeState(n, today) }));
+  return admin ? out : out.filter((n) => n.state === "activo");
+}
 /* ---------- Copias de seguridad ---------- */
 const backupStore = () => getStore({ name: "monasfit-backups", consistency: "strong" });
 const BACKUP_KEEP = 14;
@@ -1036,6 +1054,29 @@ async function fichaRoutes(route, req, url, admin) {
     const mcfg = (await store().get("mailcfg", { type: "json" })) || {};
     return json({ ready: mailReady(), sender: mailReady() ? process.env.MAIL_SENDER : "", confirm: mcfg.confirm !== false, day: mcfg.day !== false, dayE: mcfg.dayE === true, tpl, defaults: MAIL_DEFAULT, lastDay: st.day, targets: tg.map((x) => ({ name: x.name, email: x.email, state: x.info.state, days: x.info.days, due: x.info.due, sent: st.sent[x.tk] === x.info.due })) });
   }
+  if (route === "notice-save" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const title = str(b && b.title, 120).trim(), text = str(b && b.text, 1500).trim();
+    if (!title || !text) fail("Escribe un título y el texto del aviso.");
+    const level = b && b.level === "warn" ? "warn" : "info";
+    const from = isoDay(b && b.from), to = isoDay(b && b.to);
+    if (from && to && to < from) fail("La fecha final es anterior a la inicial.");
+    const list = await readNotices();
+    const id = str(b && b.id, 40);
+    const i = id ? list.findIndex((x) => x.id === id) : -1;
+    const item = { id: i >= 0 ? id : randomBytes(5).toString("hex"), title, text, level, from, to, at: Date.now() };
+    if (i >= 0) list[i] = item; else { if (list.length >= NOTICE_MAX) fail("Hay demasiados avisos. Borra alguno antiguo."); list.unshift(item); }
+    await store().setJSON("notices", list);
+    return json({ ok: true, notices: await noticesFor(true) });
+  }
+  if (route === "notice-del" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const id = str(b && b.id, 40);
+    await store().setJSON("notices", (await readNotices()).filter((x) => x.id !== id));
+    return json({ ok: true, notices: await noticesFor(true) });
+  }
   if (route === "mail-log" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
     return json(await readMailLog(150));
@@ -1485,7 +1526,7 @@ const handle = async (req) => {
         return { team: Number(t), avg: parts.reduce((x, y) => x + y, 0) / parts.length, vAvg, eAvg, nV: a.V.length, nE: a.E.length, n: a.V.length + a.E.length };
       }).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
       const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
-      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet });
+      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await noticesFor(admin) });
     }
 
     {
