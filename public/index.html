@@ -382,7 +382,7 @@ var SLOT_MIN=[null,475,530,585,670,725,780];
 /* Valoraciones: máx. 2 por franja (2 básculas Bluetooth no pueden medir a la vez): sub 1 = primeros 30 min, sub 2 = últimos 25 */
 function hm5(m){return Math.floor(m/60)+":"+String(m%60).padStart(2,"0");}
 function bTime(b){
-  if(!b||b.type!=="V"||(b.sub!==1&&b.sub!==2))return bTime(b);
+  if(!b||b.type!=="V"||(b.sub!==1&&b.sub!==2))return SLOTS[b.slot];
   var a=SLOT_MIN[b.slot];
   return b.sub===1?hm5(a)+"–"+hm5(a+30):hm5(a+30)+"–"+hm5(a+55);
 }
