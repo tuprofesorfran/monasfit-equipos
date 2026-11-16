@@ -29,6 +29,31 @@ const FALLBACK = {
 };
 // Minuto del día en que empieza cada franja (7:55, 8:50, 9:45, 11:10, 12:05, 13:00)
 const SLOT_START_MIN = [null, 475, 530, 585, 670, 725, 780];
+/* Valoraciones: máximo 2 por franja (dos básculas Tanita Bluetooth no pueden medir a la vez).
+   sub 1 = primeros 30 min; sub 2 = últimos 25 min. */
+const VAL_PER_SLOT = 2, VAL_FIRST_MIN = 30;
+const bStart = (b) => SLOT_START_MIN[b.slot] + (b.type === "V" && b.sub === 2 ? VAL_FIRST_MIN : 0);
+const bEnd = (b) => (b.type === "V" && b.sub === 1 ? SLOT_START_MIN[b.slot] + VAL_FIRST_MIN : SLOT_START_MIN[b.slot] + 55);
+const bRange = (b) => { const h = (m) => Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); return h(bStart(b)) + "–" + h(bEnd(b)); };
+/* Asigna sub a las valoraciones que no lo tienen, por orden de reserva. Devuelve true si cambió algo.
+   Las que sobran (3.ª en adelante) quedan con sub 0 = conflicto para que el coordinador las mueva. */
+function assignSubs(list) {
+  let ch = false;
+  const groups = {};
+  for (const b of list) if (b.type === "V") (groups[b.date + "#" + b.slot] = groups[b.date + "#" + b.slot] || []).push(b);
+  for (const g of Object.values(groups)) {
+    g.sort((x, y) => (x.createdAt || 0) - (y.createdAt || 0));
+    const used = new Set(g.filter((b) => b.sub === 1 || b.sub === 2).map((b) => b.sub));
+    for (const b of g) {
+      if (b.sub === 1 || b.sub === 2) continue;
+      const free = [1, 2].find((n) => !used.has(n));
+      const v = free || 0;
+      if (b.sub !== v) { b.sub = v; ch = true; }
+      if (free) used.add(free);
+    }
+  }
+  return ch;
+}
 const MAX_UPCOMING_PER_TEACHER = 8;
 
 const store = () => getStore({ name: "monasfit-equipos", consistency: "strong" });
@@ -159,6 +184,7 @@ function cleanBookings(v) {
       assignedAt: Number(b.assignedAt) || undefined,
       reminded: b.reminded === true ? true : undefined,
       confirmedAt: Number(b.confirmedAt) || undefined,
+      sub: b.type === "V" && [0, 1, 2].includes(b.sub) ? b.sub : undefined,
       subst: b.subst === true ? true : undefined,
       auto: b.auto === true ? true : undefined,
       declined: Array.isArray(b.declined) && b.declined.length
@@ -488,7 +514,11 @@ async function weeklyReport() {
   blocks.push("VALORACIONES QUE TOCAN EN LOS PRÓXIMOS 7 DÍAS" + (soon.length ? " (" + soon.length + ")\n" + soon.map((x) => "- " + x.name + ": " + fmtLong(x.info.due) + " (en " + x.info.days + " d)").join("\n") : "\nNinguna."));
   const end = addDays(today, 6);
   const pend = bookings.data.filter((b) => b.date >= today && b.date <= end && b.conf === "pending" && b.team).sort((x, y) => (x.date + x.slot < y.date + y.slot ? -1 : 1));
-  blocks.push("CITAS DE LOS PRÓXIMOS 7 DÍAS SIN CONFIRMAR POR EL EQUIPO" + (pend.length ? " (" + pend.length + ")\n" + pend.map((b) => "- " + b.teacher + " · " + fmtLong(b.date) + " " + hhmm(SLOT_START_MIN[b.slot]) + " · Equipo " + b.team).join("\n") : "\nNinguna."));
+  blocks.push("CITAS DE LOS PRÓXIMOS 7 DÍAS SIN CONFIRMAR POR EL EQUIPO" + (pend.length ? " (" + pend.length + ")\n" + pend.map((b) => "- " + b.teacher + " · " + fmtLong(b.date) + " " + hhmm(bStart(b)) + " · Equipo " + b.team).join("\n") : "\nNinguna."));
+  const vgrp = {};
+  for (const b of bookings.data) if (b.type === "V" && b.date >= today) (vgrp[b.date + "#" + b.slot] = vgrp[b.date + "#" + b.slot] || []).push(b);
+  const clash = Object.values(vgrp).filter((g) => g.length > VAL_PER_SLOT);
+  if (clash.length) blocks.push("FRANJAS CON MÁS DE 2 VALORACIONES (hay que mover o cancelar alguna; solo caben 2 por hora)\n" + clash.map((g) => "- " + fmtLong(g[0].date) + " " + SLOT_TXT[g[0].slot] + ": " + g.map((b) => b.teacher).join(", ")).join("\n"));
   const nomail = tg.filter((x) => !x.email);
   if (nomail.length) blocks.push("SIN CORREO REGISTRADO (no pueden recibir el recordatorio)\n" + nomail.map((x) => "- " + x.name).join("\n"));
   const text = "Resumen semanal · MonasFIT Salud\n" + fmtLong(today) + "\n\n" + blocks.join("\n\n") + "\n\nEntra a Gestión: " + SITE_URL() + "/#gestion";
@@ -521,7 +551,7 @@ async function dayReminders() {
   for (const b of bookings.data) {
     if (st.sent[b.id] || b.date < now.date || !SLOT_START_MIN[b.slot] || !["V", "E"].includes(b.type)) continue;
     if (b.type === "E" && cfg.dayE !== true) continue;
-    const prev = addDays(b.date, -1), start = SLOT_START_MIN[b.slot];
+    const prev = addDays(b.date, -1), start = bStart(b);
     const ready = (now.date > prev && now.date < b.date) || (now.date === prev && now.min >= start) || (now.date === b.date && now.min < start - 30);
     if (!ready) continue;
     const c = madridNow(b.createdAt);
@@ -529,7 +559,7 @@ async function dayReminders() {
     const to = byTk[b.tkey];
     if (!to) continue;
     const first = String(b.teacher || "").split(" ")[0];
-    const text = "Hola " + first + ",\n\nTe recordamos que mañana, " + fmtLong(b.date) + ", a las " + hhmm(start) + " tienes reservada tu cita en el Aula Ateca (IES Monastil):\n- " + TYPE_TXT[b.type] + "\n- Franja " + SLOT_TXT[b.slot] + "\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "/#reservar\n\nMonasFIT SALUD - IES MONASTIL";
+    const text = "Hola " + first + ",\n\nTe recordamos que mañana, " + fmtLong(b.date) + ", a las " + hhmm(start) + " tienes reservada tu cita en el Aula Ateca (IES Monastil):\n- " + TYPE_TXT[b.type] + "\n- Franja " + (b.type === "V" ? bRange(b) : SLOT_TXT[b.slot]) + "\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "/#reservar\n\nMonasFIT SALUD - IES MONASTIL";
     try { await sendMail(to, b.teacher, "Mañana a las " + hhmm(start) + " · " + TYPE_TXT[b.type] + " · MonasFIT Salud", text, { kind: "recordatorio-cita" }); st.sent[b.id] = b.date; dirty = true; sent++; }
     catch (e) { console.log("day reminder", b.id, String(e).slice(0, 160)); }
   }
@@ -619,6 +649,13 @@ export async function cronJob() {
   try { await pruneMailLog(); } catch {}
   let weekly = null;
   try { weekly = await sendWeekly(false); } catch (e) { console.log("weekly cron", String(e).slice(0, 160)); }
+  try {
+    await withLock(async () => {
+      const cur = await read("bookings");
+      const nx = cur.data.map((b) => ({ ...b }));
+      if (assignSubs(nx)) await write("bookings", cur, nx);
+    });
+  } catch (e) { console.log("subs cron", String(e).slice(0, 160)); }
   let backed = null;
   try { backed = await autoBackup(); } catch (e) { console.log("backup cron", String(e).slice(0, 160)); }
   return { reminded: due.length, mailed, dayr, weekly, backed };
@@ -711,14 +748,14 @@ const TYPE_TXT = { V: "Valoración corporal", E: "Entrenamiento guiado" };
 function icsFor(b, cancel) {
   const ymd = b.date.replace(/-/g, "");
   const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + String(m % 60).padStart(2, "0") + "00";
-  const st = SLOT_START_MIN[b.slot];
+  const st = bStart(b), en = bEnd(b);
   const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
   const L = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//MonasFIT Salud//ES", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     "BEGIN:VTIMEZONE", "TZID:Europe/Madrid",
     "BEGIN:DAYLIGHT", "TZOFFSETFROM:+0100", "TZOFFSETTO:+0200", "TZNAME:CEST", "DTSTART:19700329T020000", "RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU", "END:DAYLIGHT",
     "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET", "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
     "END:VTIMEZONE", "BEGIN:VEVENT", "UID:" + b.id + "@monasfit-salud", "DTSTAMP:" + stamp, "SEQUENCE:" + (cancel ? 1 : 0),
-    "DTSTART;TZID=Europe/Madrid:" + ymd + "T" + hm(st), "DTEND;TZID=Europe/Madrid:" + ymd + "T" + hm(st + 55),
+    "DTSTART;TZID=Europe/Madrid:" + ymd + "T" + hm(st), "DTEND;TZID=Europe/Madrid:" + ymd + "T" + hm(en),
     "SUMMARY:" + (cancel ? "CANCELADA · " : "") + "MonasFIT Salud · " + TYPE_TXT[b.type],
     "LOCATION:Aula Ateca · IES Monastil", "DESCRIPTION:" + TYPE_TXT[b.type] + " en el proyecto MonasFIT Salud.",
     "STATUS:" + (cancel ? "CANCELLED" : "CONFIRMED")];
@@ -733,7 +770,7 @@ async function bookingMail(kind, b, to, name) {
     if (cfg.confirm === false) return;
     const first = String(name || b.teacher || "").split(" ")[0];
     const cancel = kind === "cancel";
-    const quando = fmtLong(b.date) + ", " + SLOT_TXT[b.slot];
+    const quando = fmtLong(b.date) + ", " + (b.type === "V" ? bRange(b) : SLOT_TXT[b.slot]);
     const text = cancel
       ? "Hola " + first + ",\n\nTu reserva queda cancelada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n\nSi quieres otra hora, puedes reservarla aquí: " + SITE_URL() + "\n\nMonasFIT SALUD - IES MONASTIL"
       : "Hola " + first + ",\n\nTu reserva está registrada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n- Lugar: Aula Ateca (IES Monastil)\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "\n\nAdjuntamos un archivo para añadirla a tu calendario.\n\nMonasFIT SALUD - IES MONASTIL";
@@ -797,6 +834,13 @@ async function book(b) {
     if (list.length >= 3900) fail("No se pueden guardar más reservas. Avisa al coordinador.");
     const here = list.filter((x) => x.date === date && x.slot === slot);
     if (here.length >= st.cap) fail("Esa franja está completa.");
+    assignSubs(list);
+    let newSub = 0;
+    if (type === "V") {
+      const usedSub = new Set(here.filter((x) => x.type === "V" && (x.sub === 1 || x.sub === 2)).map((x) => x.sub));
+      newSub = [1, 2].find((n) => !usedSub.has(n)) || 0;
+      if (!newSub) fail("En esa franja ya hay 2 valoraciones (solo se pueden hacer 2 por hora). Elige otra franja.");
+    }
 
     const tdata = { ...teachers.data };
     const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true, ...(newEmail ? { self: true, joined: now.date } : {}) };
@@ -819,7 +863,7 @@ async function book(b) {
     tdata[tk] = t;
 
     const id = randomBytes(5).toString("hex") + Date.now().toString(36);
-    const nb = { id, date, slot, type, teacher: t.name || name, tkey: tk, team: null, createdAt: Date.now() };
+    const nb = { id, date, slot, type, teacher: t.name || name, tkey: tk, team: null, createdAt: Date.now(), ...(type === "V" ? { sub: newSub } : {}) };
     const all = [...list, nb];
     const ptr = Math.min(TEAMS, Math.max(1, Number(cfg.data.nextTeam) || 1));
     const plan = planAssign(all, tdata, ptr, new Set([id]));

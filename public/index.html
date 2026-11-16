@@ -358,7 +358,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.37.0 avisos */
+/* v1.38.0 valoraciones 2 por franja */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -379,6 +379,14 @@ var TABS=[["reservar","Reservar","📅"],["agenda","Agenda","📋"],["profesorad
 
 var DEF_SET={cap:4,open:{1:[1,2],2:[1,5,6],3:[1,2,3,4],4:[3,4,5],5:[4,5]},resp:{"1-1":"Fernando","1-2":"Fernando","2-1":"Fernando","2-5":"Fran","2-6":"Fran","3-1":"Fernando","3-2":"Fernando","3-3":"Fran","3-4":"Fran","4-3":"Fran","4-4":"Fran","4-5":"Fran","5-4":"Fernando","5-5":"Fernando"},closed:[],horizon:21};
 var SLOT_MIN=[null,475,530,585,670,725,780];
+/* Valoraciones: máx. 2 por franja (2 básculas Bluetooth no pueden medir a la vez): sub 1 = primeros 30 min, sub 2 = últimos 25 */
+function hm5(m){return Math.floor(m/60)+":"+String(m%60).padStart(2,"0");}
+function bTime(b){
+  if(!b||b.type!=="V"||(b.sub!==1&&b.sub!==2))return bTime(b);
+  var a=SLOT_MIN[b.slot];
+  return b.sub===1?hm5(a)+"–"+hm5(a+30):hm5(a+30)+"–"+hm5(a+55);
+}
+function vCount(list){return list.filter(function(b){return b.type==="V";}).length;}
 var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   tab:"reservar",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
   rev:{config:0,teams:0,teachers:0,bookings:0,settings:0},
@@ -675,7 +683,7 @@ function fmtDue(ms){var d=new Date(ms);return d.toLocaleDateString("es-ES",{week
 function pendingMine(){return S.team?S.bookings.filter(function(b){return b.team===S.team&&isPend(b)&&b.date>=todayStr();}).sort(cmp):[];}
 function confCard(b){
   var tag=dayTag(b.date),ask=S.askNo===b.id;
-  return '<div class="conf t-'+b.type+'"><div class="conf-h"><span class="time">'+SLOTS[b.slot]+'</span><div><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div class="small muted">'+esc(fmtDate(b.date))+(tag?' · '+tag:'')+'</div></div></div>'+
+  return '<div class="conf t-'+b.type+'"><div class="conf-h"><span class="time">'+bTime(b)+'</span><div><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div class="small muted">'+esc(fmtDate(b.date))+(tag?' · '+tag:'')+'</div></div></div>'+
     (b.subst?'<p class="small" style="margin:.4rem 0 0">Sustituyes al equipo que normalmente valora a este profesor.</p>':'')+
     (b.dueAt?'<p class="small due">Responded antes del <strong>'+esc(fmtDue(b.dueAt))+'</strong>. Si no hay respuesta, la sesión pasa a otro equipo.</p>':'')+
     (ask?'<p class="small"><strong>¿Seguro que no podéis?</strong> La sesión pasará a otro equipo.</p><div class="row"><button class="btn danger" data-act="confNo" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>Sí, no podemos</button><button class="btn" data-act="askNoCancel">Volver</button></div>'
@@ -719,7 +727,7 @@ function sessionCard(b){
     extra='<p class="muted small" style="margin-top:.5rem">'+(vt?"La valoración y la prescripción las hace el equipo "+vt+". Sus documentos están en la ficha.":"Este profesor aún no tiene valoración registrada.")+'</p>';
   }
   if(canSee(b.tkey)&&!S.admin)extra+='<div class="pr-row"><button class="btn sm primary" data-act="goFicha" data-k="'+esc(b.tkey)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha y documentos</button></div>';
-  return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+SLOTS[b.slot]+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+  return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
     '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
     (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div></article>';
 }
@@ -751,7 +759,7 @@ function vMine(){
   if(pm.length)html+='<div class="confbox"><h3>⏳ Por confirmar ('+pm.length+')</h3><p class="small">Se os ha asignado esta sesión. Confirmad si podéis venir; si no, pasará a otro equipo.</p>'+pm.map(confCard).join("")+'</div>';
   if(up.length){
     var nx=up[0],ntag=dayTag(nx.date);
-    html+='<div class="next t-'+nx.type+'"><p class="eyebrow">Tu próxima sesión'+(ntag?' · '+ntag:'')+'</p><div class="next-main"><span class="next-time">'+SLOTS[nx.slot]+'</span><div><strong class="next-t">'+esc(nx.teacher)+'</strong><br><span class="badge b-'+nx.type+'" style="margin-left:0">'+typeName(nx.type)+'</span> <span class="muted small">'+esc(fmtDate(nx.date))+'</span></div></div>'+(canSee(nx.tkey)&&!S.admin?'<button class="btn cta" data-act="goFicha" data-k="'+esc(nx.tkey)+'">Abrir su ficha y documentos</button>':'')+'</div>';
+    html+='<div class="next t-'+nx.type+'"><p class="eyebrow">Tu próxima sesión'+(ntag?' · '+ntag:'')+'</p><div class="next-main"><span class="next-time">'+bTime(nx)+'</span><div><strong class="next-t">'+esc(nx.teacher)+'</strong><br><span class="badge b-'+nx.type+'" style="margin-left:0">'+typeName(nx.type)+'</span> <span class="muted small">'+esc(fmtDate(nx.date))+'</span></div></div>'+(canSee(nx.tkey)&&!S.admin?'<button class="btn cta" data-act="goFicha" data-k="'+esc(nx.tkey)+'">Abrir su ficha y documentos</button>':'')+'</div>';
   }
   html+='<h2>Próximas sesiones</h2>';
   if(!up.length)html+='<div class="card muted">Todavía no tienes sesiones confirmadas. Aparecerán aquí cuando el profesorado reserve y las confirméis.</div>';
@@ -793,13 +801,13 @@ function vAgenda(){
   if(!up.length)html+='<div class="card muted">No hay sesiones próximas con este filtro.</div>';
   groupByDate(up).forEach(function(g){
     html+=dayHead(g.date)+g.items.map(function(b){
-      return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+SLOTS[b.slot]+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+      return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
         '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+(isPend(b)&&b.team?'<span class="pendchip">⏳ por confirmar</span>':'')+'</div></div></article>';
     }).join("");
   });
   if(past.length)html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' anteriores ('+past.length+')</button></div>';
   if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){
-    html+=dayHead(g.date)+g.items.map(function(b){return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+SLOTS[b.slot]+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div></article>';}).join("");
+    html+=dayHead(g.date)+g.items.map(function(b){return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div></article>';}).join("");
   });
   return html;
 }
@@ -1199,7 +1207,7 @@ function vAdmin(){
   list.forEach(function(b){
     var clash=b.team&&S.bookings.some(function(x){return x.id!==b.id&&x.team===b.team&&x.date===b.date&&x.slot===b.slot;});
     html+='<div class="list-row"><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+b.type+'</span>'+
-      '<div class="small muted">'+esc(fmtDate(b.date))+' · '+SLOTS[b.slot]+(!b.team?' · <span class="clash">sin equipo</span>':isPend(b)?' · <span class="pendchip">⏳ por confirmar</span>':' · <span class="okchip">✓</span>')+(b.dn||(b.declined&&b.declined.length)?' · <span class="small">rechazada '+(b.dn||b.declined.length)+'×</span>':'')+(clash?' <span class="clash">· Choque: el equipo tiene otra sesión a esa hora</span>':'')+'</div></div>'+
+      '<div class="small muted">'+esc(fmtDate(b.date))+' · '+bTime(b)+(b.type==='V'&&b.sub===0?' · <span class="clash">⚠ 3.ª valoración en la franja: mueve o borra</span>':'')+(!b.team?' · <span class="clash">sin equipo</span>':isPend(b)?' · <span class="pendchip">⏳ por confirmar</span>':' · <span class="okchip">✓</span>')+(b.dn||(b.declined&&b.declined.length)?' · <span class="small">rechazada '+(b.dn||b.declined.length)+'×</span>':'')+(clash?' <span class="clash">· Choque: el equipo tiene otra sesión a esa hora</span>':'')+'</div></div>'+
       '<div class="row"><select data-change="bteam" data-id="'+esc(b.id)+'" aria-label="Equipo de la sesión de '+esc(b.teacher)+'">'+teamOptions(b.team,true)+'</select>'+(b.team&&isPend(b)?'<button class="btn sm" data-act="admOk" data-id="'+esc(b.id)+'">Dar por confirmada</button>':'')+
       (S.confirmDel===b.id?'<button class="btn sm danger" data-act="delYes" data-id="'+esc(b.id)+'">Borrar</button><button class="btn sm" data-act="delNo">No</button>':'<button class="btn sm" data-act="del" data-id="'+esc(b.id)+'" aria-label="Borrar reserva">Borrar</button>')+'</div></div>';
   });
@@ -1214,7 +1222,7 @@ function fmtDay(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[
 function bookDone(r){
   var b=r.booking;
   return '<div class="card done" role="status"><p class="eyebrow">Reserva hecha</p><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
-    '<p>'+esc(fmtDate(b.date))+' · '+SLOTS[b.slot]+'</p>'+
+    '<p>'+esc(fmtDate(b.date))+' · '+bTime(b)+'</p>'+
     '<div class="big">'+(b.type==="V"?"Te valora el equipo ":"Te entrena el equipo ")+b.team+'</div>'+
     (r.members?'<p>'+esc(r.members)+'</p>':'')+
     (b.conf==="pending"?'<p class="small">⏳ El equipo tiene que confirmar la sesión. Si no puede, pasará automáticamente a otro equipo y verás el cambio en «Mis reservas».</p>':'')+
@@ -1245,14 +1253,15 @@ function calCell(c,st){
   var who=c.list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
   return '<button class="'+cls+'" data-act="pick" data-d="'+c.d+'" data-s="'+c.s+'" aria-label="'+esc(fmtDate(c.d))+', '+SLOTS[c.s]+', '+c.n+' de '+st.cap+' plazas'+(c.mine?', reservada por ti':'')+'">'+
     '<span class="cp">'+c.n+'/'+st.cap+'</span>'+(c.resp?'<span class="cr" title="Profesor responsable"><b class="cr-p">Prof. </b>'+esc(c.resp)+'</span>':'')+(who?'<span class="cn">'+who+'</span>':'')+
-    (c.mine?'<span class="ct"><strong>Tuya</strong></span>':(c.state==="full"?'<span class="ct">Completa</span>':''))+'</button>';
+    (c.mine?'<span class="ct"><strong>Tuya</strong></span>':(c.state==="full"?'<span class="ct">Completa</span>':(vCount(c.list)>=2?'<span class="ct">Val. completas</span>':'')))+'</button>';
 }
 function bookModal(st,today,last,tk){
   var c0=S.confirmBook;if(!c0)return "";
   var p=c0.date.split("-").map(Number),wd=((new Date(p[0],p[1]-1,p[2]).getDay()+6)%7)+1;
   var c=cellInfo(c0.date,c0.slot,wd,st,today,last,tk);
   if(c.state==="na"||c.state==="past")return "";
-  var who=c.list.map(function(b){return '<li>'+esc(b.teacher)+' <span class="badge b-'+b.type+'" style="margin-left:.2rem">'+b.type+'</span></li>';}).join("");
+  var who=c.list.map(function(b){return '<li>'+(b.type==="V"&&b.sub?'<strong>'+bTime(b)+'</strong> · ':'')+esc(b.teacher)+' <span class="badge b-'+b.type+'" style="margin-left:.2rem">'+b.type+'</span></li>';}).join("");
+  var vFull=vCount(c.list)>=2,vNext=vCount(c.list)===0?"primera ("+hm5(SLOT_MIN[c.s])+"–"+hm5(SLOT_MIN[c.s]+30)+")":"segunda ("+hm5(SLOT_MIN[c.s]+30)+"–"+hm5(SLOT_MIN[c.s]+55)+")";
   var h='<div class="sheet-bg" data-act="noBook"><div class="sheet" role="dialog" aria-modal="true" aria-label="Reservar franja"><p class="eyebrow">Franja seleccionada</p>'+
     '<h3 style="margin:.1rem 0 .2rem">'+esc(fmtDate(c.d))+' · '+SLOTS[c.s]+'</h3>'+
     '<p class="small" style="margin:0 0 .5rem"><strong>'+c.n+'/'+st.cap+' plazas</strong>'+(c.resp?' · Profesor responsable: '+esc(c.resp):'')+'</p>'+
@@ -1269,8 +1278,8 @@ function bookModal(st,today,last,tk){
     '<label>¿Qué necesitas?</label><div class="filters">'+
     '<button class="chip" data-act="btype" data-t="V" aria-pressed="'+(S.btype==="V")+'">Valoración (V)</button>'+
     '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button></div>'+
-    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="V"?"La valoración de tu composición corporal la hace siempre el mismo equipo. Si ya te valoraron, volverá a ser ese equipo.":"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
-    '<div class="row"><button class="btn cta" data-act="doBook"'+(S.busy?" disabled":"")+'>'+(S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
+    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="V"?(vFull?"<strong>Esta franja ya tiene las 2 valoraciones posibles</strong> (solo se pueden hacer 2 por hora). Elige otra franja o reserva un entrenamiento.":"Solo se hacen 2 valoraciones por franja: tu hora sería la <strong>"+vNext+"</strong>. La valoración la hace siempre el mismo equipo; si ya te valoraron, volverá a ser ese equipo."):"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
+    '<div class="row"><button class="btn cta" data-act="doBook"'+((S.busy||(S.btype==="V"&&vFull))?" disabled":"")+'>'+(S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
   return h;
 }
 function vReservar(){
@@ -1295,7 +1304,7 @@ function vReservar(){
     mine.forEach(function(b){
       var can=!!S.tokens[b.id];
       html+='<div class="list-row"><div class="what"><strong>'+esc(fmtDate(b.date))+'</strong><span class="badge b-'+b.type+'">'+b.type+'</span>'+
-        '<div class="small muted">'+SLOTS[b.slot]+' · '+(b.team?'Equipo '+b.team+(membersOf(b.team)?' · '+esc(membersOf(b.team)):'')+(isPend(b)?' · <span class="pendchip">⏳ pendiente de confirmar</span>':' · <span class="okchip">✓ confirmado</span>'):'Buscando equipo…')+'</div></div>'+
+        '<div class="small muted">'+bTime(b)+' · '+(b.team?'Equipo '+b.team+(membersOf(b.team)?' · '+esc(membersOf(b.team)):'')+(isPend(b)?' · <span class="pendchip">⏳ pendiente de confirmar</span>':' · <span class="okchip">✓ confirmado</span>'):'Buscando equipo…')+'</div></div>'+
         '<div class="row">'+(can?(S.confirmCancel===b.id?'<button class="btn sm danger" data-act="doCancel" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>Sí, cancelar</button><button class="btn sm" data-act="noCancel">No</button>':'<button class="btn sm" data-act="askCancel" data-id="'+esc(b.id)+'">Cancelar</button>'):'')+'</div></div>';
     });
     html+='</div>';
