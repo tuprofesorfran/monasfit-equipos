@@ -71,8 +71,9 @@ a{color:var(--ye);font-weight:600}
 .sheet ol{padding-left:20px}.sheet li{margin:8px 0}
 .sheet .btn{margin-top:12px}
 .restp{height:100vh;height:100dvh;max-width:520px;margin:0 auto;overflow:hidden;display:flex;flex-direction:column;padding:max(40px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px))}
-.restp .big{font-size:clamp(90px,22vh,200px);font-size:clamp(90px,22dvh,200px);line-height:.9;text-align:center;margin-top:3vh;color:var(--or)}
-.restp .sec{text-align:center;font-weight:700;letter-spacing:.2em;font-size:16px;color:var(--mu)}
+.restp .big{font-size:clamp(120px,min(34vh,56vw),320px);font-size:clamp(120px,min(34dvh,56vw),320px);line-height:.88;text-align:center;margin-top:2vh;color:var(--or)}
+.restp .big.d3{font-size:clamp(100px,min(34vh,36vw),300px);font-size:clamp(100px,min(34dvh,36vw),300px)}
+.restp .sec{margin-top:1vh;text-align:center;font-weight:700;letter-spacing:.2em;font-size:16px;color:var(--mu)}
 .rb{height:16px;border-radius:9px;background:var(--card2);margin:3vh 0 0;overflow:hidden;flex:none}
 .rb i{display:block;height:100%;background:linear-gradient(90deg,var(--or),var(--ye));border-radius:9px}
 .next{background:var(--card);border:2px solid var(--line);color:#fff;border-radius:22px;padding:14px 16px;margin:3vh 0 0;display:flex;gap:14px;align-items:center;flex:none}
@@ -212,7 +213,7 @@ function restView(){
   var done=pit?"Serie "+(pv.s+1)+" de "+pit.sets+" completada":"";
   var f=S.tot?Math.max(0,S.left/S.tot):0;
   if(nx){var it=ses.e[nx.i],x=info(r.d,it);txt=(it===pit)?"Serie "+(nx.s+1)+" de "+it.sets+" · "+(esc(it.reps)||"—")+" repeticiones":"Siguiente ejercicio";nm=(it.lab?it.lab+". ":"")+x.n}
-  var h='<div class="restp"><div><div class="cd" style="font-size:34px;letter-spacing:.12em;color:var(--ye)">Descansa</div><div class="mu" style="font-weight:600">'+esc(done)+'</div></div><div class="big cd" id="tt" role="timer" aria-live="off">'+S.left+'</div><div class="sec">SEGUNDOS</div><div class="rb"><i id="arc" style="width:'+Math.round(f*100)+'%"></i></div>';
+  var h='<div class="restp"><div><div class="cd" style="font-size:34px;letter-spacing:.12em;color:var(--ye)">Descansa</div><div class="mu" style="font-weight:600">'+esc(done)+'</div></div><div class="big cd'+(S.tot>=100?' d3':'')+'" id="tt" role="timer" aria-live="off">'+S.left+'</div><div class="sec">SEGUNDOS</div><div class="rb"><i id="arc" style="width:'+Math.round(f*100)+'%"></i></div>';
   if(nx)h+='<div class="next"><div class="ic cd" aria-hidden="true">→</div><div style="min-width:0"><p class="eyebrow">A continuación</p><div class="cd" style="font-size:26px;line-height:1.05;overflow-wrap:anywhere">'+esc(nm)+'</div><div class="small mu">'+txt+'</div></div></div>';
   h+='<div class="rbtn cd"><button class="a" data-a="plus">+15 s</button><button class="b" data-a="skiprest">SALTAR</button></div></div>';
   return h

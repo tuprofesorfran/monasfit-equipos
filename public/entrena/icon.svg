@@ -1,1 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><defs><linearGradient id="b" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f6bff"/><stop offset="1" stop-color="#00278c"/></linearGradient><linearGradient id="o" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc933"/><stop offset="1" stop-color="#ff8a1f"/></linearGradient></defs><rect width="512" height="512" fill="url(#b)"/><g fill="#ffc933"><rect x="46" y="226" width="42" height="60" rx="10"/><rect x="88" y="196" width="34" height="120" rx="10"/><rect x="424" y="226" width="42" height="60" rx="10"/><rect x="390" y="196" width="34" height="120" rx="10"/></g><rect x="110" y="246" width="292" height="20" rx="10" fill="#ffc933"/><circle cx="256" cy="256" r="128" fill="#0b1630"/><circle cx="256" cy="256" r="112" fill="url(#o)"/><path d="M226 202v108l92-54z" fill="#0b1630"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<defs>
+<filter id="torn" x="-5%" y="-20%" width="110%" height="140%"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.35" numOctaves="3" seed="4" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="11"/></filter>
+<linearGradient id="bn" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2f6fd0"/><stop offset="1" stop-color="#1b4fb8"/></linearGradient>
+<linearGradient id="lb" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b78d8"/><stop offset="1" stop-color="#1f56bd"/></linearGradient>
+<linearGradient id="or" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f58a3a"/><stop offset="1" stop-color="#fbb465"/></linearGradient>
+<clipPath id="c"><circle cx="256" cy="256" r="158"/></clipPath>
+</defs>
+<rect width="512" height="512" fill="#fff"/>
+<g clip-path="url(#c)"><rect x="90" y="90" width="166" height="332" fill="url(#lb)"/><rect x="256" y="90" width="166" height="332" fill="url(#or)"/></g>
+<g filter="url(#torn)"><rect x="46" y="34" width="420" height="70" fill="url(#bn)"/></g>
+<text x="256" y="87" text-anchor="middle" font-family="Arial Black,Arial,Helvetica,sans-serif" font-weight="900" font-size="49" fill="#fff">MONASFIT</text>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+<polyline points="44,272 112,272 140,226 170,306 192,272 206,272" stroke="#fff" stroke-width="34"/>
+<polyline points="44,272 112,272 140,226 170,306 192,272 206,272" stroke="#1f4fb5" stroke-width="15"/>
+<polyline points="346,272 380,272 404,236 428,290 444,272 468,272" stroke="#fff" stroke-width="34"/>
+<polyline points="346,272 380,272 404,236 428,290 444,272 468,272" stroke="#1f4fb5" stroke-width="15"/></g>
+<path d="M198 150 L198 362 L360 256 Z" fill="#e8562f" stroke="#fff" stroke-width="30" stroke-linejoin="round"/>
+<path d="M198 150 L198 362 L360 256 Z" fill="#e8562f" stroke="#1f4fb5" stroke-width="11" stroke-linejoin="round"/>
+<g filter="url(#torn)"><rect x="46" y="408" width="420" height="70" fill="url(#bn)"/></g>
+<text x="256" y="461" text-anchor="middle" font-family="Arial Black,Arial,Helvetica,sans-serif" font-weight="900" font-size="49" fill="#ffc83d">ENTRENA</text>
+</svg>
