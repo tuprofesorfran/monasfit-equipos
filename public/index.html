@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MonasFIT Reservas">
-<title>MonasFIT Salud</title>
+<title>MonasFIT Reservas</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=Inter:wght@400;500;600&display=swap">
 <style>
 /* Layout: app móvil de una columna. Cabecera fija con equipo y pestañas; sesiones como filas con la hora a la izquierda. */
@@ -358,7 +358,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.38.0 valoraciones 2 por franja */
+/* v1.40.0 resumen a varios correos */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -367,7 +367,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 </style>
 </head>
 <body>
-<div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando MonasFIT Salud…</p></div></div>
+<div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando MonasFIT Reservas…</p></div></div>
 <script>
 (function(){
 "use strict";
@@ -943,7 +943,7 @@ function vFicha(){
     '<p class="eyebrow">Ficha personal</p><h2 style="margin-top:0">'+esc(d.name)+'</h2><p class="muted small">'+who+' Estos datos son privados: no los compartas.</p>';
   if(dueTag(k))html+='<p>'+dueTag(k)+'</p>';
 
-  // La valoración, la prescripción y la entrevista se hacen en la app de rutinas MonasFIT:
+  // La valoración, la prescripción y la entrevista se hacen en la app MonasFIT Prescribe:
   // aquí la ficha solo guarda los documentos que genera. Ponlo en false para volver a mostrar esas secciones.
   var SOLO_DOCS=true;
   if(!SOLO_DOCS){
@@ -981,7 +981,7 @@ function vFicha(){
   if(d.role==="key")html+=vRate(d);
 
   // Documentos
-  html+='<div class="card docs-card"><h3>📁 Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT.</p>';
+  html+='<div class="card docs-card"><h3>📁 Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT Prescribe.</p>';
   if(!(f.docs||[]).length)html+='<p class="muted small">No hay documentos.</p>';
   (f.docs||[]).forEach(function(x){
     var dc=docCat(x);
@@ -1102,9 +1102,9 @@ function noticeCard(){
   return h;
 }
 function weeklyCard(){
-  var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada domingo a las 9:00 se envía a tu correo un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de los próximos 7 días sin confirmar y profesorado sin correo registrado.</p>';
+  var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada domingo a las 9:00 se envía a tu correo (y al de quien añadas) un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de los próximos 7 días sin confirmar y profesorado sin correo registrado.</p>';
   if(!w)return h+'<button class="btn primary" data-act="weeklyLoad"'+(S.busy?" disabled":"")+'>Configurar</button></div>';
-  h+='<label for="wk-to" class="small"><strong>Correo de destino</strong></label><div class="row" style="margin:.2rem 0 .5rem"><input id="wk-to" data-keep type="email" value="'+esc(w.to||"")+'" placeholder="tu correo corporativo" style="flex:1 1 12rem" autocomplete="off"><button class="btn primary" data-act="weeklySave"'+(S.busy?" disabled":"")+'>Guardar</button></div>';
+  h+='<label for="wk-to" class="small"><strong>Correos de destino</strong> <span class="muted">(varios, separados por comas)</span></label><div class="row" style="margin:.2rem 0 .5rem"><input id="wk-to" data-keep type="text" inputmode="email" value="'+esc(w.to||"")+'" placeholder="tu correo, el de tu compañero" style="flex:1 1 12rem" autocomplete="off"><button class="btn primary" data-act="weeklySave"'+(S.busy?" disabled":"")+'>Guardar</button></div>';
   h+='<div class="row"><button class="btn" data-act="weeklySend"'+((S.busy||!w.to||!w.ready)?" disabled":"")+'>Enviar uno ahora (prueba)</button></div>';
   h+=(w.to?'<p class="small muted" style="margin:.5rem 0 0">Activo: se enviará a <strong>'+esc(w.to)+'</strong>'+(w.lastDay?' · último envío: '+esc(shortDate(w.lastDay)):'')+'.</p>':'<p class="small muted" style="margin:.5rem 0 0">Sin correo guardado: no se enviará nada.</p>');
   return h+'</div>';
@@ -1355,7 +1355,7 @@ function vLogin(){
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="login"'+(S.busy?" disabled":"")+'>Entrar</button></div></div>';
 }
 function vCode(){
-  return '<div class="wrap"><header class="top"><p class="eyebrow">IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">MonasFIT Salud</h1></header><main>'+
+  return '<div class="wrap"><header class="top"><p class="eyebrow">Proyecto MonasFIT SALUD · IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">MonasFIT Reservas</h1></header><main>'+
     '<div class="card"><h3>Código de acceso</h3><p class="muted small">Pide el código a tu profesor.</p>'+
     '<label for="code-in">Código</label><input id="code-in" data-keep autocomplete="off" autocapitalize="off">'+
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="enterCode">Entrar</button></div>'+
@@ -1372,7 +1372,7 @@ function view(){
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
   else body=vMine()+(S.askTeam?"":vRanking());
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT Salud" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">SALUD</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT SALUD" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">Proyecto MonasFIT SALUD · IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">RESERVAS</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
     '</div><p class="credit credit-m">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+vNotices()+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
@@ -1404,7 +1404,7 @@ function vAteca(){
   '<h3 class="ab-h">Qué es INNOVATEC</h3><p class="small" style="margin:0 0 .4rem">Programa de la red NOVIGI de la Conselleria para modernizar la FP con metodologías activas y tecnología.</p><div class="ab-chips">'+["Aprendizaje colaborativo por proyectos","Evaluación formativa","El docente como guía","Digitalización en todas las familias"].map(function(v){return '<span class="tag">'+v+'</span>';}).join("")+'</div>'+
   '<h3 class="ab-h">Qué hay en el aula</h3><div class="ab-chips">'+q.map(function(v){return '<span class="tag on">'+v+'</span>';}).join("")+'</div>'+
   '<h3 class="ab-h">Y el gimnasio</h3><div class="ab-chips">'+["Racks de sentadilla","Bancos regulables","Cajones pliométricos","Poleas y máquinas guiadas","Zona de peso libre"].map(function(v){return '<span class="tag on">'+v+'</span>';}).join("")+'</div>'+
-  '<p class="ab-mis">Aquí nace MonasFIT Salud: el alumnado valora y entrena al profesorado</p>'+
+  '<p class="ab-mis">Aquí nace MonasFIT SALUD: el alumnado valora y entrena al profesorado</p>'+
   '<p class="src">Fuentes: Radio Elda Cadena SER, Guía de buenas prácticas del programa INNOVATEC (Conselleria) y fotos del aula.</p></div></div>';
 }
 function render(){
@@ -1765,7 +1765,7 @@ var actions={
     run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
   },
   weeklyLoad:function(){run(async function(){S.weekly=await api("weekly-get");},"");},
-  weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada lunes.":"Guardado: sin envío semanal.");},
+  weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada domingo a las 9:00.":"Guardado: sin envío semanal.");},
   weeklySend:function(){run(async function(){await api("weekly-send",{method:"POST",body:{}});},"Resumen de prueba enviado.");},
   backupLoad:function(){run(async function(){var r=await api("backup-list");S.backups=r.copies;},"Copias actualizadas.");},
   backupNow:function(){run(async function(){var r=await api("backup-now",{method:"POST",body:{}});S.backups=r.copies;},"Copia hecha.");},

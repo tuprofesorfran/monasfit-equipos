@@ -532,9 +532,15 @@ async function sendWeekly(force) {
   const st = (await store().get("weeklystate", { type: "json" })) || {};
   if (!force && (dow(now.date) !== 0 || now.min < 540 || st.day === now.date)) return { sent: 0 };
   const r = await weeklyReport();
-  await sendMail(cfg.to, "", (force ? "PRUEBA · " : "") + r.subject, r.text, { kind: force ? "prueba" : "resumen" });
+  const dests = String(cfg.to).split(/[,;\s]+/).filter(Boolean).slice(0, 5);
+  let ok = 0, lastErr = null;
+  for (const to of dests) {
+    try { await sendMail(to, "", (force ? "PRUEBA · " : "") + r.subject, r.text, { kind: force ? "prueba" : "resumen" }); ok++; }
+    catch (e) { lastErr = e; console.log("weekly mail", to, String(e).slice(0, 120)); }
+  }
+  if (!ok && lastErr) throw lastErr;
   if (!force) await store().setJSON("weeklystate", { day: now.date });
-  return { sent: 1 };
+  return { sent: ok };
 }
 /* ---------- Recordatorio el día anterior, a la misma hora de la cita ---------- */
 async function dayReminders() {
@@ -1035,8 +1041,10 @@ async function fichaRoutes(route, req, url, admin) {
   if (route === "weekly-save" && req.method === "POST") {
     if (!admin) fail("Solo el coordinador.");
     const b = await readJson(req);
-    const to = str(b && b.to, 120).trim().toLowerCase();
-    if (to && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) fail("Escribe un correo válido.");
+    const list = [...new Set(str(b && b.to, 400).toLowerCase().split(/[,;\s]+/).filter(Boolean))];
+    if (list.length > 5) fail("Máximo 5 correos.");
+    if (list.some((x) => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) fail("Escribe correos válidos, separados por comas.");
+    const to = list.join(", ");
     await store().setJSON("weeklycfg", { to });
     return json({ ok: true, to });
   }
