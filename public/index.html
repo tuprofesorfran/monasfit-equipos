@@ -1355,7 +1355,7 @@ function vLogin(){
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="login"'+(S.busy?" disabled":"")+'>Entrar</button></div></div>';
 }
 function vCode(){
-  return '<div class="wrap"><header class="top"><p class="eyebrow">Proyecto MonasFIT SALUD · IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">MonasFIT Reservas</h1></header><main>'+
+  return '<div class="wrap"><header class="top"><p class="eyebrow">IES Monastil · Aula Ateca</p><h1 style="padding-bottom:.7rem">MonasFIT Reservas</h1></header><main>'+
     '<div class="card"><h3>Código de acceso</h3><p class="muted small">Pide el código a tu profesor.</p>'+
     '<label for="code-in">Código</label><input id="code-in" data-keep autocomplete="off" autocapitalize="off">'+
     '<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="enterCode">Entrar</button></div>'+
@@ -1372,7 +1372,7 @@ function view(){
   else if(S.tab==="gestion")body=S.admin?vAdmin():vLogin();
   else body=vMine()+(S.askTeam?"":vRanking());
   var foot=S.admin?'<footer class="foot"><button class="btn sm" data-act="logout">Cerrar sesión de coordinación</button></footer>':'<footer class="foot"><a href="#gestion">Acceso coordinación</a></footer>';
-  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT SALUD" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">Proyecto MonasFIT SALUD · IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">RESERVAS</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
+  return '<div class="wrap"><header class="top"><div class="brand"><div class="brandL"><img class="logo" src="/api/logo" alt="Logo MonasFIT SALUD" width="56" height="56" onerror="this.remove()"><div><p class="eyebrow">IES Monastil · Aula Ateca</p><h1><span class="h1a">MonasFIT</span> <span class="h1b">RESERVAS</span></h1><p class="credit credit-d">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p></div></div><div class="org org-d"><button type="button" class="orgbtn" data-act="aboutOpen" aria-label="Más información sobre el IES Monastil"><img src="/img/iesm.jpg" alt="IES Monastil" height="60"></button><button type="button" class="orgbtn" data-act="atecaOpen" aria-label="Más información sobre el Aula Ateca"><img src="/img/ateca.jpg" alt="Aula Ateca" height="60"></button></div>'+
     '</div><p class="credit credit-m">Proyecto de Innovación desarrollado por Fran Amorós y Fernando Amorós</p>'+
     '<nav class="tabs" aria-label="Secciones">'+tabs.map(function(t){return '<a class="tab" href="#'+t[0]+'"'+(S.tab===t[0]?' aria-current="page"':'')+'>'+'<span class="ti" aria-hidden="true">'+t[2]+(t[0]==="mi-equipo"&&pendingMine().length?'<i class="tbadge">'+pendingMine().length+'</i>':'')+'</span><span>'+t[1]+'</span></a>';}).join("")+'</nav></header><main>'+vNotices()+banner()+body+'</main>'+foot+vFab()+'</div>';
 }
