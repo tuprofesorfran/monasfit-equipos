@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1630">
+<meta name="robots" content="noindex">
+<title>MonasFIT ENTRENA</title>
+<style>
+:root{--bg:#0b1630;--card:#13214a;--card2:#1a2c5e;--line:#2a3d77;--tx:#f3f6ff;--mu:#a9b8e0;--blue:#2f6bff;--or:#ff8a1f;--ye:#ffc933;--ok:#3ddc97;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:17px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-top:max(12px,env(safe-area-inset-top,0px));padding-bottom:max(28px,env(safe-area-inset-bottom,0px));min-height:100vh}
+.wrap{max-width:520px;margin:0 auto}
+h1,h2,h3,p{margin:0}
+.top{display:flex;align-items:center;gap:10px;padding:6px 0 14px}
+.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--blue),#00278c);display:grid;place-items:center;font-weight:800;font-size:15px;letter-spacing:-.5px}
+.brand b{display:block;font-size:19px;letter-spacing:.3px}.brand span{color:var(--mu);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;margin-bottom:12px}
+.eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ye);font-weight:700}
+.mu{color:var(--mu)}.small{font-size:14px}
+button{font:inherit;color:inherit;border:0;cursor:pointer}
+.btn{display:block;width:100%;padding:17px 16px;border-radius:16px;background:var(--blue);color:#fff;font-weight:700;font-size:18px;text-align:center}
+.btn.or{background:var(--or);color:#1b1100}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mu);font-weight:600;font-size:16px;padding:13px}
+.btn:disabled{opacity:.45}
+.btn:focus-visible,.ses:focus-visible,summary:focus-visible{outline:3px solid var(--ye);outline-offset:2px}
+.ses{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:10px}
+.ses .n{width:44px;height:44px;border-radius:50%;background:var(--blue);display:grid;place-items:center;font-weight:800;font-size:20px;flex:none}
+.ses.off{opacity:.55}.ses.off .n{background:var(--line)}
+.ses.done .n{background:var(--ok);color:#06241a}
+.ses.hl{border-color:var(--ye);box-shadow:0 0 0 2px rgba(255,201,51,.35)}
+.pill{display:inline-block;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:4px 11px;font-size:13px;color:var(--mu);margin:4px 6px 0 0}
+.bar{height:8px;border-radius:8px;background:var(--line);overflow:hidden;margin:10px 0 4px}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--or),var(--ye));width:0;transition:width .3s}
+.row{display:flex;gap:10px;align-items:center}
+.gifbox{background:#fff;border-radius:16px;display:grid;place-items:center;padding:6px;min-height:120px}
+.gifbox img{width:min(78vw,300px);height:auto;aspect-ratio:1;display:block;border-radius:10px;color:transparent}
+.gifbox .ph{display:none;font-size:56px;padding:40px 0}
+.gifbox.nogif img{display:none}.gifbox.nogif .ph{display:block}
+.cr{font-size:11px;color:var(--mu);text-align:center;margin-top:6px}
+.ex-n{font-size:25px;font-weight:800;line-height:1.15;margin-top:12px}
+.en{font-size:14px;color:var(--mu);font-style:italic}
+.bigset{display:flex;gap:10px;margin:12px 0}
+.bigset div{flex:1;background:var(--card2);border:1px solid var(--line);border-radius:16px;padding:10px 6px;text-align:center}
+.bigset b{display:block;font-size:30px;line-height:1.1;overflow-wrap:anywhere}.bigset span{font-size:12px;color:var(--mu);text-transform:uppercase;letter-spacing:.08em}
+.dots{display:flex;gap:8px;justify-content:center;margin:2px 0 12px;flex-wrap:wrap}
+.dots i{width:14px;height:14px;border-radius:50%;background:var(--line)}.dots i.on{background:var(--ok)}.dots i.now{background:var(--ye);box-shadow:0 0 0 3px rgba(255,201,51,.3)}
+.note{border-left:4px solid var(--or);background:rgba(255,138,31,.09);border-radius:0 12px 12px 0;padding:10px 12px;margin:10px 0;overflow-wrap:anywhere}
+details{background:var(--card2);border:1px solid var(--line);border-radius:14px;margin:10px 0;padding:0 14px}
+summary{padding:13px 0;font-weight:700;cursor:pointer}
+details ol{margin:0 0 12px;padding-left:20px;color:#dde5ff}details li{margin:6px 0}
+input[type=number]{width:96px;background:#0d1a3d;border:1px solid var(--line);border-radius:12px;color:var(--tx);font:inherit;font-size:20px;padding:10px;text-align:center}
+a{color:var(--ye)}
+.rest{text-align:center;padding-top:4vh}
+.ring{width:min(70vw,280px);aspect-ratio:1;margin:18px auto;position:relative}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .t{position:absolute;inset:0;display:grid;place-items:center;font-size:68px;font-weight:800}
+.next{background:var(--card2);border:1px solid var(--line);border-radius:14px;padding:10px 14px;text-align:left;margin:14px 0}
+.chk{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)}.chk:last-child{border:0}
+.chk b{color:var(--ok)}
+.hist{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}.hist:last-child{border:0}
+.hist button{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 12px;font-size:14px;flex:none}
+.msg{background:rgba(255,138,31,.1);border:1px solid var(--or);border-radius:14px;padding:12px 14px;margin-bottom:12px}
+.foot{color:var(--mu);font-size:12px;text-align:center;margin-top:18px}
+[hidden]{display:none!important}
+@media(prefers-reduced-motion:reduce){.bar i{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><p class="mu" style="padding:2rem 0">Cargando MonasFIT ENTRENA…</p></div>
+<script>
+"use strict";
+var GIF="https://monasfit.netlify.app/gif/";
+var CAT=null,ST={routines:{},order:[],loads:{},last:""};
+var S={v:"home",rid:"",k:0,steps:[],n:0,t0:0,endAt:0,tot:0,left:0,hl:null,msg:"",busy:true};
+var $=function(i){return document.getElementById(i)};
+function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+/* ---------- almacenamiento local (solo en este móvil) ---------- */
+function load(){try{var d=JSON.parse(localStorage.getItem("mfe2")||"null");if(d&&d.routines)ST=d}catch(e){}}
+function save(){try{localStorage.setItem("mfe2",JSON.stringify(ST))}catch(e){}}
+/* ---------- leer la rutina del enlace ---------- */
+function fromB64u(s){s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+function h32(s){var h=2166136261;for(var i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(36)}
+async function readLink(){
+  var h=location.hash||"",m=/[#&]r=([jz])([A-Za-z0-9_-]+)/.exec(h);
+  if(!m)return null;
+  var sm=/[#&]s=(\d{1,2})/.exec(h),u8=fromB64u(m[2]),txt;
+  if(m[1]==="z"){
+    if(!window.DecompressionStream)throw new Error("old");
+    var ds=new DecompressionStream("deflate-raw"),w=ds.writable.getWriter();w.write(u8);w.close();
+    txt=await new Response(ds.readable).text();
+  }else txt=new TextDecoder().decode(u8);
+  var d=JSON.parse(txt);
+  if(!d||d.v!==1||!Array.isArray(d.s))throw new Error("bad");
+  var r=norm(d);if(!r.s.some(function(x){return x.e.length}))throw new Error("bad");
+  var id=h32(m[1]+m[2]);
+  if(!ST.routines[id]){ST.routines[id]={d:r,at:Date.now(),done:{}};ST.order=ST.order.filter(function(x){return x!==id});ST.order.unshift(id);
+    while(ST.order.length>12){var old=ST.order.pop();delete ST.routines[old]}}
+  ST.last=id;save();
+  try{history.replaceState(null,"",location.pathname)}catch(e){}
+  return{id:id,k:sm?+sm[1]:null}
+}
+function norm(d){
+  var cx={};(d.x||[]).slice(0,60).forEach(function(c){if(c&&c.i)cx[String(c.i)]={n:String(c.n||"").slice(0,80),m:String(c.m||"").slice(0,100),g:String(c.g||"").slice(0,40),p:(c.p||[]).slice(0,25).map(function(q){return String(q).slice(0,300)})}});
+  return{t:String(d.t||"").slice(0,80),c:String(d.c||"").slice(0,80),g:String(d.g||"").slice(0,120),cx:cx,
+    s:d.s.slice(0,12).map(function(x){return{n:String((x&&x.n)||"").slice(0,60),e:((x&&x.e)||[]).slice(0,40).map(function(a){
+      var r=parseInt(a[3],10);return{ref:typeof a[0]==="number"?a[0]:String(a[0]),sets:Math.min(12,Math.max(1,parseInt(a[1],10)||3)),reps:String(a[2]||"").slice(0,20),rest:isNaN(r)?60:Math.min(600,Math.max(0,r)),notes:String(a[4]||"").slice(0,320),lab:String(a[5]||"").slice(0,8),vid:/^[\w-]{11}$/.test(a[6]||"")?a[6]:""}})}})}
+}
+/* ---------- datos de un ejercicio ---------- */
+function info(r,it){
+  if(typeof it.ref==="number"&&CAT&&CAT[it.ref]){var c=CAT[it.ref];return{n:c[0],musc:c[1]+(c[2]?" · "+c[2]:""),steps:c[3]||[],en:c[4]||"",gif:GIF+"DS-"+String(it.ref).padStart(4,"0")+".gif"}}
+  if(typeof it.ref==="string"&&r.cx[it.ref]){var x=r.cx[it.ref];return{n:x.n,musc:[x.g,x.m].filter(Boolean).join(" · "),steps:x.p,en:"",gif:""}}
+  return{n:"Ejercicio "+it.ref,musc:"",steps:[],en:"",gif:""}
+}
+/* Pasos de la sesión; las superseries (A1, A2…) se alternan serie a serie */
+function buildSteps(ses){
+  var e=ses.e,out=[],i=0;
+  while(i<e.length){
+    var m=/^([A-Z])\d$/.exec(e[i].lab),j=i;
+    if(m){while(j+1<e.length&&new RegExp("^"+m[1]+"\\d$").test(e[j+1].lab))j++}
+    if(j>i){var mx=0,q;for(q=i;q<=j;q++)mx=Math.max(mx,e[q].sets);
+      for(var s=0;s<mx;s++)for(q=i;q<=j;q++)if(s<e[q].sets)out.push({i:q,s:s})}
+    else{for(var s2=0;s2<e[i].sets;s2++)out.push({i:i,s:s2})}
+    i=j+1}
+  return out
+}
+function R(){return ST.routines[S.rid]}
+function SES(){return R().d.s[S.k]}
+function stepNow(){return S.steps[S.n]}
+/* ---------- sonido, vibración, pantalla encendida ---------- */
+var AC=null,WL=null,TM=null;
+function beep(n){try{AC=AC||new(window.AudioContext||window.webkitAudioContext)();for(var k=0;k<(n||1);k++){var o=AC.createOscillator(),g=AC.createGain();o.frequency.value=880;g.gain.value=.15;o.connect(g);g.connect(AC.destination);o.start(AC.currentTime+k*.25);o.stop(AC.currentTime+k*.25+.15)}}catch(e){}}
+function vib(p){try{navigator.vibrate&&navigator.vibrate(p)}catch(e){}}
+async function wake(on){try{if(on&&navigator.wakeLock){WL=await navigator.wakeLock.request("screen")}else if(WL){await WL.release();WL=null}}catch(e){}}
+document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(S.v==="rest")tick();if(S.v==="ex"||S.v==="rest")wake(true)}});
+/* ---------- vistas ---------- */
+function head(){return '<div class="top"><div class="logo" aria-hidden="true">ME</div><div class="brand"><b>MonasFIT ENTRENA</b><span>Tu entrenamiento guiado</span></div></div>'}
+function estMin(ses){var t=0;ses.e.forEach(function(x){t+=x.sets*(45+x.rest)});return Math.max(5,Math.round(t/60/5)*5)}
+function home(){
+  var h=head();
+  if(S.msg)h+='<div class="msg" role="alert">'+S.msg+'</div>';
+  var r=R();
+  if(!r){
+    h+='<div class="card"><p class="eyebrow">Mi rutina</p><h1 style="font-size:22px;margin:4px 0 8px">Abre tu rutina desde el PDF</h1><p class="mu">Para entrenar con esta aplicación, abre el PDF de tu prescripción en el móvil y toca el botón azul <b>«▶ Comenzar entrenamiento»</b> que aparece arriba a la derecha.</p></div>';
+    return h+'<p class="foot">MonasFIT SALUD · IES Monastil · Aula Ateca</p>'}
+  var d=r.d;
+  h+='<div class="card"><p class="eyebrow">Mi rutina</p><h1 style="font-size:23px;margin:4px 0 2px;overflow-wrap:anywhere">'+esc(d.t||"Mi rutina")+'</h1>'+(d.g?'<p class="mu small">Objetivo: '+esc(d.g)+'</p>':'')+(d.c?'<p class="mu small">Para: '+esc(d.c)+'</p>':'');
+  d.s.forEach(function(s,k){
+    if(!s.e.length)return;
+    var done=r.done&&r.done[k];
+    h+='<button class="ses'+(done?' done':'')+(S.hl===k?' hl':'')+'" data-a="start" data-k="'+k+'"><span class="n">'+(done?'✓':k+1)+'</span><span><b>Sesión '+(k+1)+(s.n?' · '+esc(s.n):'')+'</b><br><span class="mu small">'+s.e.length+' ejercicios · ≈ '+estMin(s)+' min</span></span></button>'});
+  h+='</div>';
+  if(ST.order.length>1){
+    h+='<div class="card"><p class="eyebrow">Rutinas anteriores</p>';
+    ST.order.filter(function(id){return id!==S.rid}).forEach(function(id){var x=ST.routines[id];h+='<div class="hist"><span class="small"><b>'+esc(x.d.t||"Rutina")+'</b><br><span class="mu">'+new Date(x.at).toLocaleDateString("es-ES")+'</span></span><button data-a="use" data-id="'+esc(id)+'">Abrir</button></div>'});
+    h+='</div>'}
+  h+='<p class="foot">Los pesos que anotes se guardan solo en este móvil. Tu equipo no recibe nada.</p>';
+  return h
+}
+function exView(){
+  var r=R(),ses=SES(),st=stepNow(),it=ses.e[st.i],x=info(r.d,it);
+  var pct=Math.round(S.n/S.steps.length*100),key=String(it.ref),last=ST.loads[key];
+  var h='<div class="row" style="justify-content:space-between"><button class="btn ghost" style="width:auto;padding:9px 14px" data-a="quit">‹ Salir</button><span class="mu small">Paso '+(S.n+1)+' de '+S.steps.length+'</span></div><div class="bar" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+pct+'%"></i></div>';
+  h+='<div class="gifbox'+(x.gif?'':' nogif')+'" style="margin-top:10px">'+(x.gif?'<img src="'+esc(x.gif)+'" alt="Demostración: '+esc(x.n)+'" width="300" height="300" data-gif="1">':'')+'<span class="ph" aria-hidden="true">🏋️</span></div>'+(x.gif?'<p class="cr">Imágenes © Gym visual</p>':'');
+  h+='<h2 class="ex-n">'+(it.lab?esc(it.lab)+'. ':'')+esc(x.n)+'</h2>'+(x.en?'<p class="en">'+esc(x.en)+'</p>':'')+(x.musc?'<p class="mu small">'+esc(x.musc)+'</p>':'');
+  h+='<div class="bigset"><div><b>'+it.sets+'</b><span>series</span></div><div><b>'+(esc(it.reps)||'—')+'</b><span>repeticiones</span></div><div><b>'+(it.rest?it.rest+'s':'—')+'</b><span>descanso</span></div></div>';
+  h+='<div class="dots" aria-label="Series">';for(var k=0;k<it.sets;k++)h+='<i class="'+(k<st.s?'on':(k===st.s?'now':''))+'"></i>';h+='</div>';
+  if(it.notes)h+='<div class="note"><b>Nota de tu equipo</b><br>'+esc(it.notes)+'</div>';
+  h+='<div class="row" style="margin:8px 0 12px"><label for="kg" class="mu small" style="flex:1">Peso de hoy (kg)<br><span style="font-size:12px">'+(last?'La última vez: '+esc(last)+' kg · ':'')+'se guarda solo en tu móvil</span></label><input id="kg" type="number" inputmode="decimal" min="0" step="0.5" value="'+esc(last||"")+'" placeholder="—"></div>';
+  if(x.steps.length)h+='<details><summary>Cómo se hace</summary><ol>'+x.steps.map(function(t){return'<li>'+esc(t)+'</li>'}).join('')+'</ol></details>';
+  var vurl=it.vid?"https://www.youtube.com/watch?v="+it.vid:"https://www.youtube.com/results?search_query="+encodeURIComponent(x.n+" ejercicio");
+  h+='<p class="small" style="margin:6px 0 14px"><a href="'+esc(vurl)+'" target="_blank" rel="noopener">▶ Ver vídeo de la técnica</a></p>';
+  h+='<button class="btn or" data-a="setdone">Serie '+(st.s+1)+' de '+it.sets+' hecha</button>';
+  h+='<button class="btn ghost" style="margin-top:10px" data-a="skip">No tengo el material · saltar ejercicio</button>';
+  return h
+}
+function restView(){
+  var ses=SES(),nx=S.steps[S.n],r=R(),txt="",nm="";
+  if(nx){var it=ses.e[nx.i],x=info(r.d,it),cur=ses.e[S.steps[S.n-1].i];txt=(it===cur)?"Siguiente: serie "+(nx.s+1)+" de "+it.sets:"Siguiente ejercicio";nm=(it.lab?it.lab+". ":"")+x.n}
+  var Rr=110,C=2*Math.PI*Rr,f=S.tot?Math.max(0,S.left/S.tot):0;
+  var h='<div class="rest"><p class="eyebrow">Descanso</p><div class="ring"><svg viewBox="0 0 260 260" aria-hidden="true"><circle cx="130" cy="130" r="'+Rr+'" fill="none" stroke="#2a3d77" stroke-width="16"/><circle id="arc" cx="130" cy="130" r="'+Rr+'" fill="none" stroke="#ff8a1f" stroke-width="16" stroke-linecap="round" stroke-dasharray="'+C+'" stroke-dashoffset="'+(C*(1-f))+'"/></svg><div class="t" id="tt" role="timer" aria-live="off">'+S.left+'</div></div>';
+  if(nx)h+='<div class="next"><span class="mu small">'+esc(txt)+'</span><br><b>'+esc(nm)+'</b></div>';
+  h+='<div class="row"><button class="btn ghost" data-a="plus">+15 s</button><button class="btn" data-a="skiprest">Saltar descanso</button></div></div>';
+  return h
+}
+function endView(){
+  var r=R(),ses=SES(),mins=Math.max(1,Math.round((Date.now()-S.t0)/60000));
+  var h=head()+'<div class="card" style="text-align:center"><p style="font-size:54px">🎉</p><h1 style="font-size:26px">¡Sesión completada!</h1><p class="mu" style="margin-top:6px">Sesión '+(S.k+1)+(ses.n?' · '+esc(ses.n):'')+' · '+mins+' min</p></div><div class="card">';
+  ses.e.forEach(function(it){var x=info(r.d,it),l=ST.loads[String(it.ref)];h+='<div class="chk"><b>✓</b><span>'+esc(x.n)+(l?' <span class="mu small">· '+esc(l)+' kg</span>':'')+'</span></div>'});
+  return h+'</div><button class="btn" data-a="home">Volver a mi rutina</button><p class="foot">Tu equipo no recibe nada: tus datos se quedan en este móvil.</p>'
+}
+function render(){
+  clearInterval(TM);
+  var h=S.v==="home"?home():S.v==="ex"?exView():S.v==="rest"?restView():endView();
+  $("app").innerHTML=h;
+  var im=document.querySelector("img[data-gif]");if(im)im.onerror=function(){this.parentNode.classList.add("nogif")};
+  if(S.v==="rest")TM=setInterval(tick,500)
+}
+function go(v){S.v=v;render();window.scrollTo(0,0)}
+function tick(){
+  var left=Math.max(0,Math.ceil((S.endAt-Date.now())/1000)),tt=$("tt"),arc=$("arc");
+  if(left!==S.left){S.left=left;if(left>0&&left<=3)beep(1)}
+  if(tt)tt.textContent=S.left;
+  if(arc)arc.setAttribute("stroke-dashoffset",2*Math.PI*110*(1-(S.tot?S.left/S.tot:0)));
+  if(left<=0){clearInterval(TM);beep(3);vib([200,100,200]);go("ex")}
+}
+function saveKg(){var k=$("kg");if(!k||S.v!=="ex")return;var it=SES().e[stepNow().i],key=String(it.ref);if(k.value!==""&&!isNaN(parseFloat(k.value)))ST.loads[key]=String(parseFloat(k.value));else delete ST.loads[key];save()}
+function finish(){var r=R();r.done=r.done||{};r.done[S.k]=Date.now();save();wake(false);beep(2);vib([300,100,300]);go("end")}
+function advance(rest){
+  S.n++;
+  if(S.n>=S.steps.length){finish();return}
+  if(rest>0){S.tot=rest;S.left=rest;S.endAt=Date.now()+rest*1000;vib(60);go("rest")}else go("ex")
+}
+document.addEventListener("click",function(ev){
+  var b=ev.target.closest("[data-a]");if(!b)return;var a=b.getAttribute("data-a");
+  if(a==="start"){S.k=+b.getAttribute("data-k");S.steps=buildSteps(SES());S.n=0;S.t0=Date.now();wake(true);beep(0);go("ex")}
+  else if(a==="setdone"){saveKg();var st=stepNow(),it=SES().e[st.i];advance(it.rest)}
+  else if(a==="skip"){saveKg();var cur=stepNow().i;S.steps=S.steps.filter(function(s,j){return j<=S.n?true:s.i!==cur});
+    S.steps.splice(S.n,1);if(S.n>=S.steps.length){finish()}else go("ex")}
+  else if(a==="plus"){S.left+=15;S.tot+=15;S.endAt+=15000;render()}
+  else if(a==="skiprest"){go("ex")}
+  else if(a==="quit"){saveKg();wake(false);S.v="home";render()}
+  else if(a==="home"){go("home")}
+  else if(a==="use"){S.rid=b.getAttribute("data-id");ST.last=S.rid;save();S.hl=null;go("home")}
+});
+/* ---------- arranque ---------- */
+async function prefetch(){
+  try{var r=R();if(!r||!navigator.serviceWorker)return;await navigator.serviceWorker.ready;
+    var seen={};r.d.s.forEach(function(s){s.e.forEach(function(it){if(typeof it.ref==="number"&&!seen[it.ref]){seen[it.ref]=1;fetch(GIF+"DS-"+String(it.ref).padStart(4,"0")+".gif",{mode:"cors"}).catch(function(){})}})})}catch(e){}
+}
+(async function(){
+  load();
+  try{if("serviceWorker"in navigator)navigator.serviceWorker.register("/entrena/sw.js",{scope:"/entrena/"}).catch(function(){})}catch(e){}
+  try{var r=await fetch("cat.json");CAT=await r.json()}catch(e){CAT=null;S.msg="No se pudo cargar el catálogo de ejercicios. Comprueba la conexión y vuelve a abrir el enlace."}
+  S.rid=ST.last&&ST.routines[ST.last]?ST.last:(ST.order[0]||"");
+  try{var res=await readLink();if(res){S.rid=res.id;S.hl=res.k}}
+  catch(e){S.msg=(e&&e.message==="old")?"Tu navegador es demasiado antiguo para abrir este enlace. Actualízalo o prueba con otro.":"No se ha podido leer la rutina de este enlace. Pide a tu equipo que genere de nuevo el PDF."}
+  S.v="home";render();prefetch()
+})();
+</script>
+</body>
+</html>

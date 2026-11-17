@@ -9,3 +9,8 @@
   for = "/sw.js"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/entrena/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
