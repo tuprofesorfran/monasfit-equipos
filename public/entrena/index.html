@@ -100,6 +100,8 @@ a{color:var(--ye);font-weight:600}
 .exp .kgc{padding:3px 12px}.exp .kgc input{padding:5px;font-size:20px}
 .exp .btn.or{padding:9px;font-size:21px;box-shadow:0 5px 0 #b85a00;margin-bottom:5px}
 .exp .lnk button,.exp .lnk a{min-height:38px;padding:4px}
+.exh .pct{color:var(--ye);font-size:20px;line-height:1;min-width:3.2em;text-align:right;font-variant-numeric:tabular-nums}
+.exh .bar{height:12px}
 </style>
 </head>
 <body>
@@ -185,7 +187,7 @@ function home(){
   d.s.forEach(function(s,k){
     if(!s.e.length)return;
     var done=r.done&&r.done[k];
-    h+='<button class="ses c'+(k%3)+(done?' done':'')+(S.hl===k?' hl':'')+'" data-a="start" data-k="'+k+'"><span class="n">'+(done?'✓':k+1)+'</span><span><b>Sesión '+(k+1)+(s.n?' · '+esc(s.n):'')+'</b><br><span class="mu small">'+s.e.length+' ejercicios · ≈ '+estMin(s)+' min</span></span></button>'});
+    h+='<button class="ses c'+(k%3)+(done?' done':'')+(S.hl===k?' hl':'')+'" data-a="start" data-k="'+k+'"><span class="n">'+(done?'✓':k+1)+'</span><span><b>'+(done?'Pulsa aquí para repetir tu entrenamiento':'Pulsa aquí para empezar tu entrenamiento')+'</b><br><span class="mu small">Sesión '+(k+1)+(s.n?' · '+esc(s.n):'')+' · '+s.e.length+' ejercicios · ≈ '+estMin(s)+' min</span></span></button>'});
   if(ST.order.length>1){
     h+='<div class="card" style="margin-top:16px"><p class="eyebrow">Rutinas anteriores</p>';
     ST.order.filter(function(id){return id!==S.rid}).forEach(function(id){var x=ST.routines[id];h+='<div class="hist"><span class="small"><b>'+esc(x.d.t||"Rutina")+'</b><br><span class="mu">'+new Date(x.at).toLocaleDateString("es-ES")+'</span></span><button data-a="use" data-id="'+esc(id)+'">Abrir</button></div>'});
@@ -196,7 +198,7 @@ function home(){
 function exView(){
   var r=R(),ses=SES(),st=stepNow(),it=ses.e[st.i],x=info(r.d,it);
   var pct=Math.round(S.n/S.steps.length*100),key=String(it.ref),last=ST.loads[key];
-  var h='<div class="exp"><div class="exh"><div class="row" style="justify-content:space-between"><button class="back" data-a="quit">‹ Salir</button><div style="text-align:right"><div class="small" style="letter-spacing:.1em;color:var(--mu)">PASO '+(S.n+1)+' DE '+S.steps.length+'</div><b style="color:var(--ye)">Serie '+(st.s+1)+' de '+it.sets+'</b></div></div><div class="bar" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+pct+'%"></i></div></div><div class="pg">';
+  var h='<div class="exp"><div class="exh"><div class="row" style="gap:12px;flex-wrap:nowrap"><button class="back" data-a="quit">‹ Salir</button><span class="small" style="letter-spacing:.08em;color:var(--mu);white-space:nowrap;font-weight:600">PASO '+(S.n+1)+' DE '+S.steps.length+'</span><b style="color:var(--ye);white-space:nowrap">Serie '+(st.s+1)+' de '+it.sets+'</b></div><div class="row" style="margin-top:6px;gap:10px"><div class="bar" style="flex:1;margin:0" role="progressbar" aria-valuenow="'+pct+'" aria-valuemin="0" aria-valuemax="100"><i style="width:'+pct+'%"></i></div><b class="pct" aria-hidden="true">'+pct+' %</b></div></div><div class="pg">';
   h+='<div class="gifbox'+(x.gif?'':' nogif')+'">'+(x.gif?'<img src="'+esc(x.gif)+'" alt="Demostración: '+esc(x.n)+'" width="300" height="300" data-gif="1">':'')+'<span class="ph" aria-hidden="true">🏋️</span></div>';
   h+='<h2 class="ex-n cd">'+(it.lab?esc(it.lab)+'. ':'')+esc(x.n)+'</h2>';
   h+='<div class="bigset"><div><b class="cd">'+it.sets+'</b><span>series</span></div><div><b class="cd">'+(esc(it.reps)||'—')+'</b><span>repeticiones</span></div><div><b class="cd">'+(it.rest?it.rest+' s':'—')+'</b><span>descanso</span></div></div>';
