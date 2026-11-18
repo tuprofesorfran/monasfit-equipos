@@ -574,6 +574,7 @@ async function dayReminders() {
 }
 /* ---------- Avisos para quien entra en la app ---------- */
 const NOTICE_MAX = 20;
+const ANEC_KINDS = ["asistencia", "puntualidad", "entrenamiento", "actitud", "positivo", "otro"];
 const isoDay = (x) => (/^\d{4}-\d{2}-\d{2}$/.test(String(x || "")) ? String(x) : "");
 async function readNotices() {
   const v = await store().get("notices", { type: "json" });
@@ -1128,6 +1129,34 @@ async function fichaRoutes(route, req, url, admin) {
     const id = str(b && b.id, 40);
     await store().setJSON("notices", (await readNotices()).filter((x) => x.id !== id));
     return json({ ok: true, notices: await noticesFor(true) });
+  }
+  if (route === "anec-list" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    return json({ items: (await store().get("anec", { type: "json" })) || [] });
+  }
+  if (route === "anec-save" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const text = str(b && b.text, 800).trim();
+    if (!text) fail("Escribe qué ha pasado.");
+    const team = int(b && b.team, 1, TEAMS);
+    if (!team) fail("Elige el equipo.");
+    const kind = ANEC_KINDS.includes(b && b.kind) ? b.kind : "otro";
+    const list = (await store().get("anec", { type: "json" })) || [];
+    const id = str(b && b.id, 40);
+    const i = id ? list.findIndex((x) => x.id === id) : -1;
+    const item = { id: i >= 0 ? id : randomBytes(5).toString("hex"), team, date: isoDay(b && b.date) || madridNow().date, kind, who: str(b && b.who, 80).trim(), text, at: Date.now() };
+    if (i >= 0) list[i] = item; else { if (list.length >= 3000) fail("El registro está lleno. Descarga una copia y borra anotaciones antiguas."); list.unshift(item); }
+    await store().setJSON("anec", list);
+    return json({ ok: true, items: list });
+  }
+  if (route === "anec-del" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const id = str(b && b.id, 40);
+    const list = ((await store().get("anec", { type: "json" })) || []).filter((x) => x.id !== id);
+    await store().setJSON("anec", list);
+    return json({ ok: true, items: list });
   }
   if (route === "mail-log" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");

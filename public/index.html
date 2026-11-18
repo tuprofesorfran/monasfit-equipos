@@ -358,7 +358,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.42.3 MonasFIT ENTRENA diseño oscuro (/entrena) */
+/* v1.43.0 Registro anecdótico (/entrena) */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -1101,6 +1101,34 @@ function noticeCard(){
     +'<div class="row" style="margin-top:.7rem"><button class="btn primary" data-act="noticeSave"'+(S.busy?' disabled':'')+'>'+(f.id?'Guardar cambios':'Publicar aviso')+'</button>'+(f.id?' <button class="btn sm" data-act="noticeNew">Cancelar edición</button>':'')+'</div></div>';
   return h;
 }
+var ANEC_K=[["asistencia","Asistencia"],["puntualidad","Puntualidad"],["entrenamiento","Entrenamiento / prescripción"],["actitud","Actitud y trabajo en equipo"],["positivo","Aspecto positivo"],["otro","Otro"]];
+function anecLbl(k){var r=ANEC_K.filter(function(x){return x[0]===k;})[0];return r?r[1]:"Otro";}
+function anecCard(){
+  var h='<div class="card"><h3>Registro anecdótico de los equipos</h3><p class="muted small">Apunta lo que vaya pasando en cada equipo: faltas, retrasos, un entrenamiento que no se ajustaba al objetivo del profesor, algo que han hecho muy bien… Solo lo ves tú.</p>';
+  if(!S.anec)return h+'<button class="btn primary" data-act="anecLoad"'+(S.busy?" disabled":"")+'>Abrir registro</button></div>';
+  var f=S.anecForm||{},L=S.anec.slice(),ft=S.anecFT||"",fk=S.anecFK||"",q=(S.anecQ||"").toLowerCase();
+  h+='<h4 style="margin:.6rem 0 .3rem">'+(f.id?'Editar anotación':'Nueva anotación')+'</h4><div class="grid2">'
+    +'<div><label for="an-team" class="small"><strong>Equipo</strong></label><select id="an-team" data-keep>'+teamOptions(f.team||0,false).replace('<option value="1"','<option value="">Elige…</option><option value="1"')+'</select></div>'
+    +'<div><label for="an-date" class="small"><strong>Día</strong></label><input id="an-date" data-keep type="date" value="'+esc(f.date||todayStr())+'"></div>'
+    +'<div><label for="an-kind" class="small"><strong>Tipo</strong></label><select id="an-kind" data-keep>'+ANEC_K.map(function(x){return '<option value="'+x[0]+'"'+((f.kind||"asistencia")===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div>'
+    +'<div><label for="an-who" class="small"><strong>Quién</strong> (alumno/a o profesor/a, opcional)</label><input id="an-who" data-keep maxlength="80" autocomplete="off" value="'+esc(f.who||"")+'"></div></div>'
+    +'<label for="an-text" class="small"><strong>Qué ha pasado</strong></label><textarea id="an-text" data-keep rows="4" maxlength="800" style="width:100%">'+esc(f.text||"")+'</textarea>'
+    +'<div class="row" style="margin-top:.6rem"><button class="btn primary" data-act="anecSave"'+(S.busy?' disabled':'')+'>'+(f.id?'Guardar cambios':'Guardar anotación')+'</button>'+(f.id?' <button class="btn sm" data-act="anecNew">Cancelar edición</button>':'')+'</div>';
+  h+='<h4 style="margin:1.1rem 0 .3rem">Anotaciones ('+L.length+')</h4><div class="grid2">'
+    +'<div><label for="an-ft" class="small"><strong>Ver equipo</strong></label><select id="an-ft" data-change="anecFilter"><option value="">Todos</option>'+teamOptions(ft,false)+'</select></div>'
+    +'<div><label for="an-fk" class="small"><strong>Ver tipo</strong></label><select id="an-fk" data-change="anecFilter"><option value="">Todos</option>'+ANEC_K.map(function(x){return '<option value="'+x[0]+'"'+(fk===x[0]?' selected':'')+'>'+x[1]+'</option>';}).join('')+'</select></div></div>'
+    +'<label for="an-q" class="small"><strong>Buscar</strong></label><input id="an-q" data-keep type="search" style="width:100%" placeholder="nombre o palabra" value="'+esc(S.anecQ||"")+'"><button class="btn sm" data-act="anecFilter" style="margin-top:.3rem">Buscar</button>';
+  L=L.filter(function(x){return (!ft||String(x.team)===String(ft))&&(!fk||x.kind===fk)&&(!q||(x.text+" "+x.who).toLowerCase().indexOf(q)>=0);}).sort(function(a,b){return (b.date.localeCompare(a.date))||((b.at||0)-(a.at||0));});
+  if(!L.length)h+='<p class="muted small" style="margin-top:.5rem">No hay anotaciones con ese filtro.</p>';
+  L.slice(0,60).forEach(function(n){
+    h+='<div class="list-row" style="flex-wrap:wrap;gap:.4rem;align-items:flex-start"><span style="flex:1 1 13rem;min-width:0"><strong>Equipo '+n.team+'</strong> · '+esc(shortDate(n.date))+' · <span class="tag'+(n.kind==="positivo"?' on':'')+'">'+esc(anecLbl(n.kind))+'</span>'+(n.who?'<br><small class="muted">'+esc(n.who)+'</small>':'')+'<br><span style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(n.text)+'</span></span><span class="row">'
+      +'<button class="btn sm" data-act="anecEdit" data-id="'+esc(n.id)+'">Editar</button>'
+      +(S.anecDel===n.id?'<button class="btn sm danger" data-act="anecDelYes" data-id="'+esc(n.id)+'">Borrar</button><button class="btn sm" data-act="anecDelNo">No</button>':'<button class="btn sm" data-act="anecDel" data-id="'+esc(n.id)+'">Borrar</button>')+'</span></div>';
+  });
+  if(L.length>60)h+='<p class="muted small">Se muestran las 60 más recientes. Usa los filtros o descarga el registro para verlas todas.</p>';
+  h+='<div class="row" style="margin-top:.7rem"><button class="btn" data-act="anecCsv">Descargar registro (Excel/CSV)</button></div></div>';
+  return h;
+}
 function weeklyCard(){
   var w=S.weekly,h='<div class="card"><h3>Resumen semanal para coordinación</h3><p class="muted small">Cada domingo a las 9:00 se envía a tu correo (y al de quien añadas) un resumen: documentos que faltan (por equipo de valoración), valoraciones retrasadas o próximas, citas de los próximos 7 días sin confirmar y profesorado sin correo registrado.</p>';
   if(!w)return h+'<button class="btn primary" data-act="weeklyLoad"'+(S.busy?" disabled":"")+'>Configurar</button></div>';
@@ -1157,7 +1185,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=noticeCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
+  html+=noticeCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1764,6 +1792,23 @@ var actions={
     var body={id:f.id||"",title:g("nt-title"),text:g("nt-text"),level:g("nt-level"),from:g("nt-from"),to:g("nt-to")};
     run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
   },
+  anecLoad:function(){run(async function(){var r=await api("anec-list");S.anec=r.items;},"");},
+  anecNew:function(){S.anecForm=null;S.noRestore=true;render();},
+  anecEdit:function(d){var n=(S.anec||[]).filter(function(x){return x.id===d.id;})[0];if(!n)return;S.anecForm={id:n.id,team:n.team,date:n.date,kind:n.kind,who:n.who,text:n.text};S.noRestore=true;render();var el=document.getElementById("an-text");if(el)el.scrollIntoView({block:"center"});},
+  anecDel:function(d){S.anecDel=d.id;render();},
+  anecDelNo:function(){S.anecDel=null;render();},
+  anecDelYes:function(d){var id=d.id;S.anecDel=null;run(async function(){var r=await api("anec-del",{method:"POST",body:{id:id}});S.anec=r.items;},"Anotación borrada.");},
+  anecSave:function(){
+    var g=function(i){var e=document.getElementById(i);return e?e.value:"";},f=S.anecForm||{};
+    var body={id:f.id||"",team:g("an-team"),date:g("an-date"),kind:g("an-kind"),who:g("an-who"),text:g("an-text")};
+    run(async function(){var r=await api("anec-save",{method:"POST",body:body});S.anec=r.items;S.anecForm=null;S.noRestore=true;},"Anotación guardada.");
+  },
+  anecFilter:function(){var g=function(i){var e=document.getElementById(i);return e?e.value:"";};S.anecFT=g("an-ft");S.anecFK=g("an-fk");S.anecQ=g("an-q");S.noRestore=true;render();},
+  anecCsv:function(){
+    var rows=[["Día","Equipo","Tipo","Quién","Qué ha pasado"]].concat((S.anec||[]).slice().sort(function(a,b){return a.date.localeCompare(b.date);}).map(function(n){return [n.date,"Equipo "+n.team,anecLbl(n.kind),n.who,n.text];}));
+    var csv="﻿"+rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""').replace(/\r?\n/g," ")+'"';}).join(";");}).join("\r\n");
+    var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));a.download="registro-anecdotico.csv";document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},500);
+  },
   weeklyLoad:function(){run(async function(){S.weekly=await api("weekly-get");},"");},
   weeklySave:function(){var el=document.getElementById("wk-to"),v=el?el.value.trim():"";run(async function(){var r=await api("weekly-save",{method:"POST",body:{to:v}});S.weekly=await api("weekly-get");},v?"Guardado. El resumen llegará a "+v+" cada domingo a las 9:00.":"Guardado: sin envío semanal.");},
   weeklySend:function(){run(async function(){await api("weekly-send",{method:"POST",body:{}});},"Resumen de prueba enviado.");},
@@ -1796,6 +1841,7 @@ var actions={
   }
 };
 var changes={
+  anecFilter:function(){actions.anecFilter();},
   bkemail:function(el){var v=el.value.trim().toLowerCase();if(v!==S.email){S.needName=false;S.email=v;S.myTk="";lsSet("monasfit.email",v);lsSet("monasfit.tkey","");}},
   tEmail:function(el){
     var k=el.dataset.k,v=el.value.trim();
