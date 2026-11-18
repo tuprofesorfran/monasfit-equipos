@@ -480,27 +480,44 @@ async function docSummary(teachersData) {
   }));
   return sum;
 }
+/* Control de documentos por equipo (se pide a demanda desde Gestión; no forma parte de /state, así no retrasa el arranque) */
+async function docControl() {
+  const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
+  const today = madridNow().date;
+  const rows = [];
+  await Promise.all(Object.entries(teachers.data).map(async ([tk, t]) => {
+    if (t.archived) return;
+    const vs = bookings.data.filter((b) => b.tkey === tk && b.type === "V" && b.team && b.date <= today).sort((x, y) => (x.date < y.date ? -1 : 1));
+    const fv = firstValOf(t), lastB = vs[vs.length - 1];
+    if (!lastB && !fv) return;
+    let who, when, team = 0;
+    if (fv && (!lastB || fv.date > lastB.date)) { who = fv.who ? "Valoración de " + fv.who : "Equipo sin identificar"; when = fv.date; } else { who = "Equipo " + lastB.team; when = lastB.date; team = lastB.team; }
+    const [f, pr] = await Promise.all([readFicha(tk), store().get("prescriptions/" + tk, { type: "json" })]);
+    // Solo cuenta lo subido desde el día de la última valoración (cada valoración trae su composición corporal y su prescripción).
+    const since = Date.parse(when + "T00:00:00+01:00") - 3600000;
+    const docs = f.docs || [];
+    const hasVal = (f.valoraciones || []).some((x) => (x.date ? x.date >= when : (f.updatedAt || 0) >= since)) || docs.some((d) => docCat(d) === "valoracion" && (d.at || 0) >= since);
+    const hasPres = !!(pr && (pr.updatedAt || 0) >= since) || docs.some((d) => docCat(d) === "prescripcion" && (d.at || 0) >= since);
+    const first = vs.length + (fv ? 1 : 0) <= 1;
+    const hasParq = docs.some((d) => docCat(d) === "parq");
+    const miss = [];
+    if (!hasVal) miss.push("composición corporal");
+    if (first && !hasParq) miss.push("PAR-Q");
+    // Se da por hecho que todos piden prescripción; el coordinador ignora a los pocos que no la piden.
+    if (!hasPres) miss.push("prescripción");
+    rows.push({ tk, name: t.name, who, team, date: when, miss });
+  }));
+  return rows.sort((x, y) => x.name.localeCompare(y.name, "es"));
+}
 /* ---------- Resumen semanal para el coordinador ---------- */
 const hhmm = (m) => String(Math.floor(m / 60)) + ":" + String(m % 60).padStart(2, "0");
 async function weeklyReport() {
   const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
   const today = madridNow().date;
-  const sum = await docSummary(teachers.data);
   const groups = {};
   let nMiss = 0;
-  for (const [tk, t] of Object.entries(teachers.data)) {
-    if (t.archived) continue;
-    const vs = bookings.data.filter((b) => b.tkey === tk && b.type === "V" && b.team && b.date <= today).sort((x, y) => (x.date < y.date ? -1 : 1));
-    const fv = firstValOf(t), lastB = vs[vs.length - 1];
-    if (!lastB && !fv) continue;
-    let who, when;
-    if (fv && (!lastB || fv.date > lastB.date)) { who = fv.who ? "Valoración de " + fv.who : "Equipo sin identificar"; when = fv.date; } else { who = "Equipo " + lastB.team; when = lastB.date; }
-    const c = sum[tk] || { valoracion: 0, parq: 0, prescripcion: 0 };
-    const miss = [];
-    if (!c.valoracion) miss.push("composición corporal");
-    if (!c.parq) miss.push("PAR-Q");
-    if (!c.prescripcion) miss.push("prescripción");
-    if (miss.length) { (groups[who] = groups[who] || []).push("- " + t.name + " (" + fmtLong(when) + "): falta " + miss.join(", ")); nMiss++; }
+  for (const r of await docControl()) {
+    if (r.miss.length) { (groups[r.who] = groups[r.who] || []).push("- " + r.name + " (" + fmtLong(r.date) + "): falta " + r.miss.join(", ")); nMiss++; }
   }
   const blocks = [];
   const keys = Object.keys(groups).sort((x, y) => x.localeCompare(y, "es"));
@@ -1129,6 +1146,10 @@ async function fichaRoutes(route, req, url, admin) {
     const id = str(b && b.id, 40);
     await store().setJSON("notices", (await readNotices()).filter((x) => x.id !== id));
     return json({ ok: true, notices: await noticesFor(true) });
+  }
+  if (route === "doc-control" && req.method === "GET") {
+    if (!admin) fail("Solo el coordinador.");
+    return json({ rows: await docControl() });
   }
   if (route === "anec-list" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");

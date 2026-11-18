@@ -363,7 +363,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.44.1 Agenda: check pequeño y arranque admin (/entrena) */
+/* v1.45.3 Control de documentos (/entrena) */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -1120,6 +1120,20 @@ function noticeCard(){
 }
 var ANEC_K=[["asistencia","Asistencia"],["puntualidad","Puntualidad"],["entrenamiento","Entrenamiento / prescripción"],["actitud","Actitud y trabajo en equipo"],["positivo","Aspecto positivo"],["otro","Otro"]];
 function anecLbl(k){var r=ANEC_K.filter(function(x){return x[0]===k;})[0];return r?r[1]:"Otro";}
+function dctlCard(){
+  var h='<div class="card"><h3>Control de documentos de las valoraciones</h3><p class="muted small">Para cada profesor valorado, mira si su equipo ha subido a la ficha la composición corporal, el PAR-Q (solo en la primera valoración) y la prescripción. Se da por hecho que todos la piden: ignora a quien no la necesite. Se calcula cuando lo pides, así no retrasa la aplicación.</p>';
+  if(!S.dctl)return h+'<button class="btn primary" data-act="dctlLoad"'+(S.busy?" disabled":"")+'>Revisar ahora</button></div>';
+  var R=S.dctl,pend=R.filter(function(r){return r.miss.length;}),ok=R.filter(function(r){return !r.miss.length;});
+  function grp(list){var g={};list.forEach(function(r){(g[r.who]=g[r.who]||[]).push(r);});return Object.keys(g).sort(function(a,b){return a.localeCompare(b,"es",{numeric:true});}).map(function(k){return [k,g[k]];});}
+  h+='<div class="row" style="margin:.4rem 0"><button class="btn sm" data-act="dctlLoad"'+(S.busy?" disabled":"")+'>Volver a revisar</button>'+(pend.length?'<button class="btn sm" data-act="dctlCopy">Copiar lista de pendientes</button>':'')+'</div>';
+  h+='<h4 style="margin:.8rem 0 .3rem">Les falta algo ('+pend.length+')</h4>';
+  if(!pend.length)h+='<p class="muted small">Todos los equipos han subido todo.</p>';
+  grp(pend).forEach(function(g){h+='<div style="margin:.5rem 0"><strong>'+esc(g[0])+'</strong>'+g[1].map(function(r){return '<div class="small" style="margin:.15rem 0 .15rem .6rem">'+esc(r.name)+' · '+esc(shortDate(r.date))+' · <span style="color:var(--danger)">falta '+esc(r.miss.join(", "))+'</span></div>';}).join('')+'</div>';});
+  h+='<h4 style="margin:1rem 0 .3rem">Lo han subido todo ('+ok.length+')</h4>';
+  if(!ok.length)h+='<p class="muted small">Todavía ninguno.</p>';
+  grp(ok).forEach(function(g){h+='<div style="margin:.4rem 0"><strong>'+esc(g[0])+'</strong>'+g[1].map(function(r){return '<div class="small" style="margin:.15rem 0 .15rem .6rem">'+esc(r.name)+'</div>';}).join('')+'</div>';});
+  return h+'</div>';
+}
 function anecCard(){
   var h='<div class="card"><h3>Registro anecdótico de los equipos</h3><p class="muted small">Apunta lo que vaya pasando en cada equipo: faltas, retrasos, un entrenamiento que no se ajustaba al objetivo del profesor, algo que han hecho muy bien… Solo lo ves tú.</p>';
   if(!S.anec)return h+'<button class="btn primary" data-act="anecLoad"'+(S.busy?" disabled":"")+'>Abrir registro</button></div>';
@@ -1202,7 +1216,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=noticeCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
+  html+=noticeCard();html+=dctlCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1808,6 +1822,12 @@ var actions={
     var g=function(i){var e=document.getElementById(i);return e?e.value:"";},f=S.noticeForm||{};
     var body={id:f.id||"",title:g("nt-title"),text:g("nt-text"),level:g("nt-level"),from:g("nt-from"),to:g("nt-to")};
     run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
+  },
+  dctlLoad:function(){run(async function(){var r=await api("doc-control");S.dctl=r.rows;},"");},
+  dctlCopy:function(){
+    var R=(S.dctl||[]).filter(function(r){return r.miss.length;}),g={};R.forEach(function(r){(g[r.who]=g[r.who]||[]).push(r);});
+    var t="Documentos pendientes de subir a la ficha:\n\n"+Object.keys(g).sort(function(a,b){return a.localeCompare(b,"es",{numeric:true});}).map(function(k){return k+":\n"+g[k].map(function(r){return "- "+r.name+" ("+r.date+"): falta "+r.miss.join(", ");}).join("\n");}).join("\n\n");
+    try{navigator.clipboard.writeText(t).then(function(){S.msg="Lista copiada.";S.msgKind="ok";render();},function(){S.msg="No se pudo copiar. Selecciona el texto a mano.";S.msgKind="err";render();});}catch(e){S.msg="No se pudo copiar.";S.msgKind="err";render();}
   },
   anecLoad:function(){run(async function(){var r=await api("anec-list");S.anec=r.items;},"");},
   anecNew:function(){S.anecForm=null;S.noRestore=true;render();},
