@@ -1561,11 +1561,18 @@ const handle = async (req) => {
 
     if (route === "state" && req.method === "GET") {
       if (needSweep((await read("bookings")).data, Date.now())) await runSweep();
-      const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
       const team = int(url.searchParams.get("team"), 1, TEAMS);
       const s = store();
-      const { blobs } = await s.list({ prefix: "prescriptions/" });
-      const recs = await Promise.all(blobs.map((b) => s.get(b.key, { type: "json" })));
+      // Todas las lecturas independientes arrancan a la vez (antes iban una tras otra y el arranque tardaba más)
+      const pPres = s.list({ prefix: "prescriptions/" }).then(({ blobs }) => Promise.all(blobs.map((b) => s.get(b.key, { type: "json" }))));
+      const pTK = s.list({ prefix: "teamkeys/" });
+      const pEm = read("emails");
+      const pKeys = admin ? s.list({ prefix: "keys/" }) : null;
+      const pRate = s.list({ prefix: "ratings/" }).then(async (rl) => ({ rl, rr: await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" }))) }));
+      const pNot = noticesFor(admin);
+      [pPres, pTK, pEm, pKeys, pRate, pNot].forEach((x) => x && x.catch && x.catch(() => {}));
+      const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
+      const recs = await pPres;
       const prescriptions = {};
       const teamOk = admin || (team ? await teamAuth(req, team, false) : false);
       for (const p of recs) {
@@ -1573,22 +1580,21 @@ const handle = async (req) => {
         if (admin || (team && teamOk)) prescriptions[p.tkey] = p;
       }
       const teamKeysSet = {};
-      for (const b of (await s.list({ prefix: "teamkeys/" })).blobs) teamKeysSet[b.key.slice(9)] = true;
-      const em = await read("emails");
+      for (const b of (await pTK).blobs) teamKeysSet[b.key.slice(9)] = true;
+      const em = await pEm;
       const emailMode = Object.keys(em.data).length > 0;
       let keys, emailList;
       if (admin) {
         emailList = em.data;
         keys = {};
-        const kl = await s.list({ prefix: "keys/" });
+        const kl = await pKeys;
         for (const b of kl.blobs) keys[b.key.slice(5)] = true;
       }
       // Valoraciones de los profesores a los equipos: detalle solo para coordinación; ranking (media y nº) para todos
       const ratings = admin ? [] : undefined;
       const agg = {};
       {
-        const rl = await s.list({ prefix: "ratings/" });
-        const rr = await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" })));
+        const { rl, rr } = await pRate;
         rr.forEach((r, i) => {
           const tk = rl.blobs[i].key.slice(8);
           for (const [k, v] of Object.entries(r || {})) {
@@ -1607,7 +1613,7 @@ const handle = async (req) => {
         return { team: Number(t), avg: parts.reduce((x, y) => x + y, 0) / parts.length, vAvg, eAvg, nV: a.V.length, nE: a.E.length, n: a.V.length + a.E.length };
       }).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
       const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
-      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await noticesFor(admin) });
+      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await pNot });
     }
 
     {

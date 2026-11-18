@@ -358,7 +358,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.43.1 Nombres de equipo en agenda (/entrena) */
+/* v1.43.2 Arranque más rápido (/entrena) */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -458,9 +458,7 @@ async function api(path,opts){
   if(!r.ok){var er=new Error((data&&data.error)||("Error "+r.status));er.status=r.status;er.data=data;throw er;}
   return data;
 }
-async function refresh(){
-  try{
-    var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
+function applyState(d){
     S.needCode=false;S.err="";
     S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];
     if(!S.admin&&S.team&&S.teamKeysSet[S.team]&&!S.teamKeys[S.team]){S.askTeam=S.team;S.team=null;}
@@ -468,6 +466,12 @@ async function refresh(){
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
     Object.keys(S.tokens).forEach(function(id){if(!ids[id]){delete S.tokens[id];ch=true;}});if(ch)saveTokens();
     S.rev={config:d.config.rev,teams:d.teams.rev,teachers:d.teachers.rev,bookings:d.bookings.rev,settings:d.settings?d.settings.rev:0};
+}
+async function refresh(){
+  try{
+    var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
+    applyState(d);
+    if(!S.admin){try{lsSet("monasfit.cache",JSON.stringify({t:S.team||0,d:d}));}catch(e){}}else{try{lsSet("monasfit.cache","");}catch(e){}}
   }catch(e){
     if(e.status===401&&e.data&&e.data.needCode){S.needCode=true;S.err=S.code?"Código incorrecto.":"";}
     else S.err="No se pudieron cargar los datos. Comprueba la conexión.";
@@ -1932,7 +1936,10 @@ async function init(){
   try{S.teamKeys=JSON.parse(lsGet("monasfit.teamkeys")||"{}")||{};}catch(e){S.teamKeys={};}
   S.adminPass=ssGet("monasfit.admin");
   try{S.fpass=JSON.parse(ssGet("monasfit.fk")||"{}")||{};}catch(e){S.fpass={};}
-  readHash();render();
+  readHash();
+  // Arranque rápido: se pinta al instante con los últimos datos guardados en este móvil y se actualizan enseguida
+  if(!S.adminPass){try{var cc=JSON.parse(lsGet("monasfit.cache")||"null");if(cc&&cc.d&&(cc.t||0)===(S.team||0)){applyState(cc.d);S.loaded=true;}}catch(e){}}
+  render();
   if(S.adminPass){try{await api("admin-check");S.admin=true;}catch(e){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");}}
   await refresh();
   render();
