@@ -250,6 +250,11 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .tab{flex-direction:column;display:flex;align-items:center;gap:.05rem;line-height:1.15;padding:.35rem .2rem}.tab .ti{font-size:1.15rem}
 .time{font-size:1.5rem}
 .sess{border-left:5px solid var(--line)}.sess.t-E{border-left-color:var(--warm)}.sess.t-V{border-left-color:var(--logo-blue)}
+.sess.done{position:relative;border-left-color:#3B6D11;background:linear-gradient(0deg,rgba(59,109,17,.12),rgba(59,109,17,.12)),var(--surface)}
+.sess.done.today{background:linear-gradient(0deg,rgba(59,109,17,.12),rgba(59,109,17,.12)),var(--surface)}
+.sess.done>div{opacity:.62}
+.okc{position:absolute;top:.4rem;right:.4rem;width:1.6rem;height:1.6rem;border-radius:50%;background:#3B6D11;color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.okc svg{width:14px;height:14px}
 .sess.today{background:linear-gradient(90deg,rgba(255,214,102,.22),transparent 70%),var(--surface)}
 .day .dl{background:var(--warm);color:#3b2a00}
 .eyebrow{letter-spacing:.1em}
@@ -358,7 +363,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
-/* v1.43.5 ENTRENA cabecera (/entrena) */
+/* v1.44.1 Agenda: check pequeño y arranque admin (/entrena) */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
 .notice h3{margin:0 0 .25rem;font-size:1.05rem}
@@ -386,6 +391,13 @@ function bTime(b){
   var a=SLOT_MIN[b.slot];
   return b.sub===1?hm5(a)+"–"+hm5(a+30):hm5(a+30)+"–"+hm5(a+55);
 }
+function bEndMin(b){var a=SLOT_MIN[b.slot]||0;if(b.type==="V"&&b.sub===1)return a+30;return a+55;}
+function isDone(b){
+  if(!b||isPend(b))return false;
+  var t=todayStr();if(b.date<t)return true;if(b.date>t)return false;
+  var d=new Date();return d.getHours()*60+d.getMinutes()>=bEndMin(b);
+}
+var CHECK='<span class="okc" role="img" aria-label="Realizada" title="Realizada"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>';
 function vCount(list){return list.filter(function(b){return b.type==="V";}).length;}
 var S={admin:false,adminPass:"",code:"",needCode:false,loaded:false,err:"",
   tab:"reservar",team:null,config:{nextTeam:1},teams:{},teachers:{},bookings:[],prescriptions:{},settings:DEF_SET,
@@ -471,7 +483,7 @@ async function refresh(){
   try{
     var d=await api("state"+(S.team&&!S.admin?"?team="+S.team:""));
     applyState(d);
-    if(!S.admin){try{lsSet("monasfit.cache",JSON.stringify({t:S.team||0,d:d}));}catch(e){}}else{try{lsSet("monasfit.cache","");}catch(e){}}
+    if(!S.admin){try{lsSet("monasfit.cache",JSON.stringify({t:S.team||0,d:d}));}catch(e){}}else{try{lsSet("monasfit.cache","");ssSet("monasfit.cacheA",JSON.stringify({d:d}));}catch(e){}}
   }catch(e){
     if(e.status===401&&e.data&&e.data.needCode){S.needCode=true;S.err=S.code?"Código incorrecto.":"";}
     else S.err="No se pudieron cargar los datos. Comprueba la conexión.";
@@ -732,9 +744,9 @@ function sessionCard(b){
     extra='<p class="muted small" style="margin-top:.5rem">'+(vt?"La valoración y la prescripción las hace el equipo "+vt+". Sus documentos están en la ficha.":"Este profesor aún no tiene valoración registrada.")+'</p>';
   }
   if(canSee(b.tkey)&&!S.admin)extra+='<div class="pr-row"><button class="btn sm primary" data-act="goFicha" data-k="'+esc(b.tkey)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha y documentos</button></div>';
-  return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+  var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
     '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
-    (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div></article>';
+    (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div>'+(dn?CHECK:'')+'</article>';
 }
 function groupByDate(list){
   var g=[],cur=null;
@@ -806,13 +818,13 @@ function vAgenda(){
   if(!up.length)html+='<div class="card muted">No hay sesiones próximas con este filtro.</div>';
   groupByDate(up).forEach(function(g){
     html+=dayHead(g.date)+g.items.map(function(b){
-      return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
-        '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+(isPend(b)&&b.team?'<span class="pendchip">⏳ por confirmar</span>':'')+'</div></div></article>';
+      var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
+        '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+(isPend(b)&&b.team?'<span class="pendchip">⏳ por confirmar</span>':'')+'</div></div>'+(dn?CHECK:'')+'</article>';
     }).join("");
   });
   if(past.length)html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' anteriores ('+past.length+')</button></div>';
   if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){
-    html+=dayHead(g.date)+g.items.map(function(b){return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+'"><div><span class="time">'+bTime(b)+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div></article>';}).join("");
+    html+=dayHead(g.date)+g.items.map(function(b){var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div>'+(dn?CHECK:'')+'</article>';}).join("");
   });
   return html;
 }
@@ -1938,10 +1950,16 @@ async function init(){
   try{S.fpass=JSON.parse(ssGet("monasfit.fk")||"{}")||{};}catch(e){S.fpass={};}
   readHash();
   // Arranque rápido: se pinta al instante con los últimos datos guardados en este móvil y se actualizan enseguida
-  if(!S.adminPass){try{var cc=JSON.parse(lsGet("monasfit.cache")||"null");if(cc&&cc.d&&(cc.t||0)===(S.team||0)){applyState(cc.d);S.loaded=true;}}catch(e){}}
+  if(S.adminPass){try{var ca=JSON.parse(ssGet("monasfit.cacheA")||"null");if(ca&&ca.d){S.admin=true;applyState(ca.d);S.loaded=true;}}catch(e){}}
+  else{try{var cc=JSON.parse(lsGet("monasfit.cache")||"null");if(cc&&cc.d&&(cc.t||0)===(S.team||0)){applyState(cc.d);S.loaded=true;}}catch(e){}}
   render();
-  if(S.adminPass){try{await api("admin-check");S.admin=true;}catch(e){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");}}
-  await refresh();
+  if(S.adminPass){
+    // La contraseña se comprueba a la vez que se cargan los datos (antes iba una cosa detrás de otra)
+    S.admin=true;
+    var bad=false;
+    await Promise.all([api("admin-check").catch(function(){bad=true;}),refresh()]);
+    if(bad){S.adminPass="";S.admin=false;ssSet("monasfit.admin","");ssSet("monasfit.cacheA","");await refresh();}
+  }else{await refresh();}
   render();
   // Se actualiza solo con la pestaña visible y sin abusar del servidor (cada 2 minutos como mucho).
   var last=Date.now();
