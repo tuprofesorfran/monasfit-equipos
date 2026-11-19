@@ -267,6 +267,7 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .podium{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.45rem;align-items:end;margin:.7rem 0 .5rem;text-align:center}
 .pod{display:flex;flex-direction:column;align-items:center;gap:.1rem;min-width:0}
 .pod .pm{font-size:1.7rem;line-height:1}.pod .pn{font-weight:700;font-size:.9rem}.pod .pa{white-space:nowrap;letter-spacing:-.04em;font-size:.78rem;color:var(--warm-ink);font-weight:700}
+.pod .pt{font-size:.72rem;line-height:1.15;color:var(--muted,inherit);opacity:.85;overflow-wrap:anywhere;max-width:100%}
 .pod .pb{display:block;width:100%;border-radius:8px 8px 0 0;margin-top:.25rem;background:linear-gradient(180deg,#ffd666,#f6a65a)}
 .pod.p1 .pb{height:68px}.pod.p2 .pb{height:46px;background:linear-gradient(180deg,#e3e8ee,#b9c3cf)}.pod.p3 .pb{height:32px;background:linear-gradient(180deg,#f0b27a,#c9793a)}
 .pod.mine .pn{text-decoration:underline;text-decoration-color:var(--logo-blue);text-decoration-thickness:3px}
@@ -363,6 +364,8 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
+/* v1.45.5 Nombres en el podio */
+/* v1.45.4 Clave visible junto al profesor */
 /* v1.45.3 Control de documentos (/entrena) */
 .notice{margin:.7rem 0;padding:.7rem .9rem;border:1.5px solid var(--accent);border-radius:12px;background:var(--accent-soft);color:var(--fg)}
 .notice.warn{border-color:var(--warm);background:var(--warm-soft);color:var(--warm-ink)}
@@ -927,7 +930,7 @@ function vRanking(){
   if(!R.length)return html+'<p class="muted small">Todavía no hay valoraciones. En cuanto el profesorado puntúe, aparecerá aquí la clasificación.</p></div>';
   if(R.length>=3){
     var po=[1,0,2];html+='<div class="podium">';
-    po.forEach(function(i){var r=R[i];html+='<div class="pod p'+(i+1)+(S.team===r.team?" mine":"")+'"><span class="pm">'+med[i]+'</span><span class="pn">Equipo '+r.team+'</span><span class="pa"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> '+String(Math.round(r.avg*10)/10).replace(".",",")+' <small>('+r.n+')</small></span><span class="pb"></span></div>';});
+    po.forEach(function(i){var r=R[i];html+='<div class="pod p'+(i+1)+(S.team===r.team?" mine":"")+'"><span class="pm">'+med[i]+'</span><span class="pn">Equipo '+r.team+'</span>'+(membersOf(r.team)?'<span class="pt">'+esc(membersOf(r.team))+'</span>':"")+'<span class="pa"><span style="color:#f6a65a">'+starsTxt(Math.round(r.avg))+'</span> '+String(Math.round(r.avg*10)/10).replace(".",",")+' <small>('+r.n+')</small></span><span class="pb"></span></div>';});
     html+='</div>';
   }
   R.forEach(function(r,i){
@@ -1019,7 +1022,6 @@ function vAdminTeachers(){
   var old=act.filter(function(k){return (S.teachers[k].course||"")!==cur;}).length;
   var nokey=act.filter(function(k){return !S.keys[k];}).length;
   var html='<div class="card"><h3>Profesorado y claves</h3><p class="muted small">Cada profesor entra en su ficha (Profesorado → Abrir ficha) con su clave. Genérala aquí y entrégasela. Curso actual: <strong>'+cur+'</strong>.</p>';
-  if(S.fnew)html+='<div class="note ok"><strong>Clave de '+esc((S.teachers[S.fnew.tkey]||{}).name||S.fnew.tkey)+'</strong><br><span class="fkey">'+esc(S.fnew.key)+'</span><br><span class="small">Anótala ahora: no se puede volver a ver (si se pierde, genera otra). La anterior deja de valer.</span> <button class="btn sm" data-act="fNewOk">Ya la he anotado</button></div>';
   var emOf={};Object.keys(S.emails||{}).forEach(function(e){emOf[S.emails[e]]=e;});
   html+='<div class="note'+(S.emailMode?' ok':'')+' small">'+(S.emailMode?'<strong>Reserva con correo activada.</strong> Solo pueden reservar los correos registrados ('+Object.keys(S.emails||{}).length+'). Para dar de alta a alguien nuevo, añade su correo aquí.':'Todavía no hay ningún correo registrado: el profesorado reserva escribiendo su nombre. En cuanto registres el primer correo, pasarán a reservar con el correo corporativo.')+'</div>';
   html+='<div class="grid2"><div><label for="nt-name">Añadir profesor</label><input id="nt-name" data-keep autocomplete="off" placeholder="Nombre y apellido"></div>'+
@@ -1039,6 +1041,7 @@ function vAdminTeachers(){
     html+='<div class="list-row"><div class="what"><strong>'+esc(t.name)+'</strong>'+(t.archived?'<span class="tag">Archivado</span>':'')+(t.needsVal?'<span class="tag">Prescripción pendiente</span>':'')+'<span class="tag'+(has?' on':'')+'">'+(has?"Con clave":"Sin clave")+'</span>'+
       '<div class="row" style="margin-top:.3rem"><label class="small muted" for="tc-'+esc(k)+'" style="margin:0">Curso</label><input id="tc-'+esc(k)+'" data-change="tCourse" data-k="'+esc(k)+'" value="'+esc(t.course||"")+'" style="width:6.5rem" autocomplete="off"></div>'+
       '<div class="row" style="margin-top:.3rem"><label class="small muted" for="te-'+esc(k)+'" style="margin:0">Correo</label><input id="te-'+esc(k)+'" type="email" data-change="tEmail" data-k="'+esc(k)+'" value="'+esc(emOf[k]||"")+'" placeholder="sin correo" autocapitalize="off" autocomplete="off" style="flex:1;min-width:10rem"></div></div>'+
+      (S.fnew&&S.fnew.tkey===k?'<div class="note ok" id="fnew-box"><strong>Clave de '+esc(t.name)+'</strong><br><span class="fkey">'+esc(S.fnew.key)+'</span><br><span class="small">Anótala ahora: no se puede volver a ver (si se pierde, genera otra). La anterior deja de valer.</span> <button class="btn sm" data-act="fNewOk">Ya la he anotado</button></div>':'')+
       '<div class="row" style="justify-content:flex-end">'+
       (S.confirmKey===k?'<button class="btn sm danger" data-act="genKeyYes" data-k="'+esc(k)+'">Sí, nueva clave</button><button class="btn sm" data-act="genKeyNo">No</button>':
         '<button class="btn sm" data-act="genKey" data-k="'+esc(k)+'"'+(S.busy?" disabled":"")+'>'+(has?"Nueva clave":"Generar clave")+'</button>')+
@@ -1750,7 +1753,7 @@ var actions={
   genKeyNo:function(){S.confirmKey=null;render();},
   genKeyYes:function(d){
     S.confirmKey=null;
-    run(async function(){var r=await api("ficha-key",{method:"POST",body:{tkey:d.k}});S.keys[d.k]=true;S.fnew={tkey:d.k,key:r.key};},"");
+    run(async function(){var r=await api("ficha-key",{method:"POST",body:{tkey:d.k}});S.keys[d.k]=true;S.fnew={tkey:d.k,key:r.key};S.noRestore=true;},"").then(function(){setTimeout(function(){var el=document.getElementById("fnew-box");if(el)el.scrollIntoView({block:"center"});},50);});
   },
   fNewOk:function(){S.fnew=null;render();},
   togArch:function(){S.showArch=!S.showArch;render();},
