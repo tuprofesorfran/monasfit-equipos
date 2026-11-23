@@ -364,6 +364,8 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
+/* v1.46.2 Listado de profesorado */
+/* v1.46.1 Valoración + entrenamiento en la misma franja */
 /* v1.45.5 Nombres en el podio */
 /* v1.45.4 Clave visible junto al profesor */
 /* v1.45.3 Control de documentos (/entrena) */
@@ -390,11 +392,11 @@ var SLOT_MIN=[null,475,530,585,670,725,780];
 /* Valoraciones: máx. 2 por franja (2 básculas Bluetooth no pueden medir a la vez): sub 1 = primeros 30 min, sub 2 = últimos 25 */
 function hm5(m){return Math.floor(m/60)+":"+String(m%60).padStart(2,"0");}
 function bTime(b){
-  if(!b||b.type!=="V"||(b.sub!==1&&b.sub!==2))return SLOTS[b.slot];
+  if(!b||b.type!=="V"||(b.sub!==1&&b.sub!==2)||b.ve)return SLOTS[b.slot];
   var a=SLOT_MIN[b.slot];
   return b.sub===1?hm5(a)+"–"+hm5(a+30):hm5(a+30)+"–"+hm5(a+55);
 }
-function bEndMin(b){var a=SLOT_MIN[b.slot]||0;if(b.type==="V"&&b.sub===1)return a+30;return a+55;}
+function bEndMin(b){var a=SLOT_MIN[b.slot]||0;if(b.type==="V"&&b.sub===1&&!b.ve)return a+30;return a+55;}
 function isDone(b){
   if(!b||isPend(b))return false;
   var t=todayStr();if(b.date<t)return true;if(b.date>t)return false;
@@ -423,7 +425,7 @@ var TYPE_RANK={V:0,E:1};
 function cmp(a,b){
   return a.date.localeCompare(b.date)||(a.slot-b.slot)||((TYPE_RANK[a.type]||0)-(TYPE_RANK[b.type]||0))||((a.createdAt||0)-(b.createdAt||0))||String(a.id).localeCompare(String(b.id));
 }
-function typeName(t){return t==="V"?"Valoración":"Entrenamiento";}
+function typeName(t,b){return t==="V"?(b&&b.ve?"Valoración + entrenamiento":"Valoración"):"Entrenamiento";}
 
 /* ---------- Lógica de rotación (pura) ---------- */
 function planAssign(bookings,teachers,ptr){
@@ -475,7 +477,7 @@ async function api(path,opts){
 }
 function applyState(d){
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];S.vereq=d.vereq||[];
     if(!S.admin&&S.team&&S.teamKeysSet[S.team]&&!S.teamKeys[S.team]){S.askTeam=S.team;S.team=null;}
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
@@ -703,7 +705,7 @@ function fmtDue(ms){var d=new Date(ms);return d.toLocaleDateString("es-ES",{week
 function pendingMine(){return S.team?S.bookings.filter(function(b){return b.team===S.team&&isPend(b)&&b.date>=todayStr();}).sort(cmp):[];}
 function confCard(b){
   var tag=dayTag(b.date),ask=S.askNo===b.id;
-  return '<div class="conf t-'+b.type+'"><div class="conf-h"><span class="time">'+bTime(b)+'</span><div><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div class="small muted">'+esc(fmtDate(b.date))+(tag?' · '+tag:'')+'</div></div></div>'+
+  return '<div class="conf t-'+b.type+'"><div class="conf-h"><span class="time">'+bTime(b)+'</span><div><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type,b)+'</span><div class="small muted">'+esc(fmtDate(b.date))+(tag?' · '+tag:'')+'</div></div></div>'+
     (b.subst?'<p class="small" style="margin:.4rem 0 0">Sustituyes al equipo que normalmente valora a este profesor.</p>':'')+
     (b.dueAt?'<p class="small due">Responded antes del <strong>'+esc(fmtDue(b.dueAt))+'</strong>. Si no hay respuesta, la sesión pasa a otro equipo.</p>':'')+
     (ask?'<p class="small"><strong>¿Seguro que no podéis?</strong> La sesión pasará a otro equipo.</p><div class="row"><button class="btn danger" data-act="confNo" data-id="'+esc(b.id)+'"'+(S.busy?" disabled":"")+'>Sí, no podemos</button><button class="btn" data-act="askNoCancel">Volver</button></div>'
@@ -748,7 +750,7 @@ function sessionCard(b){
   }
   if(canSee(b.tkey)&&!S.admin)extra+='<div class="pr-row"><button class="btn sm primary" data-act="goFicha" data-k="'+esc(b.tkey)+'"><span class="lock" aria-hidden="true">🔒</span>Abrir ficha y documentos</button></div>';
   var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
-    '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
+    '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type,b)+'</span>'+
     (tag?'<span class="small muted"> · '+tag+'</span>':'')+extra+'</div>'+(dn?CHECK:'')+'</article>';
 }
 function groupByDate(list){
@@ -822,12 +824,12 @@ function vAgenda(){
   groupByDate(up).forEach(function(g){
     html+=dayHead(g.date)+g.items.map(function(b){
       var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span><span class="slotn">Franja '+b.slot+'</span></div>'+
-        '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+(isPend(b)&&b.team?'<span class="pendchip">⏳ por confirmar</span>':'')+'</div></div>'+(dn?CHECK:'')+'</article>';
+        '<div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type,b)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+(isPend(b)&&b.team?'<span class="pendchip">⏳ por confirmar</span>':'')+'</div></div>'+(dn?CHECK:'')+'</article>';
     }).join("");
   });
   if(past.length)html+='<div class="row" style="margin-top:1.2rem"><button class="btn sm" data-act="togglePast">'+(S.showPast?"Ocultar":"Ver")+' anteriores ('+past.length+')</button></div>';
   if(S.showPast)groupByDate(past.slice().reverse()).forEach(function(g){
-    html+=dayHead(g.date)+g.items.map(function(b){var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div>'+(dn?CHECK:'')+'</article>';}).join("");
+    html+=dayHead(g.date)+g.items.map(function(b){var dn=isDone(b);return '<article class="sess t-'+b.type+(b.date===todayStr()?' today':'')+(dn?' done':'')+'"><div><span class="time">'+bTime(b)+'</span></div><div class="what"><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type,b)+'</span><div style="margin-top:.35rem">'+teamChip(b.team,b.team&&b.team===S.team)+'</div></div>'+(dn?CHECK:'')+'</article>';}).join("");
   });
   return html;
 }
@@ -1033,7 +1035,7 @@ function vAdminTeachers(){
     '<p class="muted small">Una persona por línea: nombre, correo corporativo y equipo que la valora (1 a 12), separados por comas. El correo y el equipo son opcionales.</p>'+
     (S.impErr.length?'<div class="note err small">'+S.impErr.map(esc).join("<br>")+'</div>':'')+
     '<div class="row" style="margin:.4rem 0 .8rem"><button class="btn primary" data-act="importTeachers"'+(S.busy?" disabled":"")+'>Importar profesorado</button>'+
-    (nokey?'<button class="btn" data-act="genKeysAll"'+(S.busy?" disabled":"")+'>Generar claves de los '+nokey+' sin clave</button>':'')+'</div>'+
+    '<button class="btn" data-act="tCopyList">Copiar listado de nombres ('+act.length+')</button>'+(nokey?'<button class="btn" data-act="genKeysAll"'+(S.busy?" disabled":"")+'>Generar claves de los '+nokey+' sin clave</button>':'')+'</div>'+
     (S.fall?'<div class="note ok"><strong>Claves nuevas</strong><p class="small" style="margin:.3rem 0">Cópialas ahora y repártelas: no se vuelven a mostrar.</p><textarea id="fall-txt" rows="8" readonly style="font-family:ui-monospace,Menlo,monospace">'+esc(S.fall.map(function(x){return x.name+"\t"+x.key;}).join("\n"))+'</textarea><div class="row" style="margin-top:.5rem"><button class="btn sm primary" data-act="fAllCopy">Copiar lista</button><button class="btn sm" data-act="fAllOk">Ya las he copiado</button></div></div>':'');
   var list=all.filter(function(k){return S.showArch||!S.teachers[k].archived;});
   list.forEach(function(k){
@@ -1123,6 +1125,13 @@ function noticeCard(){
 }
 var ANEC_K=[["asistencia","Asistencia"],["puntualidad","Puntualidad"],["entrenamiento","Entrenamiento / prescripción"],["actitud","Actitud y trabajo en equipo"],["positivo","Aspecto positivo"],["otro","Otro"]];
 function anecLbl(k){var r=ANEC_K.filter(function(x){return x[0]===k;})[0];return r?r[1]:"Otro";}
+function vrCard(){
+  var L=(S.vereq||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot;});
+  var h='<div class="card"><h3>Solicitudes de valoración + entrenamiento ('+L.length+')</h3><p class="muted small">Profesores que han pedido valoración y entrenamiento en una hora donde ya hay otra valoración, así que no cabía todo. Decide tú cómo cuadrarlo y pulsa «Hecha».</p>';
+  if(!L.length)return h+'<p class="muted small">No hay solicitudes pendientes.</p></div>';
+  L.forEach(function(r){h+='<div class="list-row"><div class="what"><strong>'+esc(r.teacher)+'</strong><div class="small muted">'+esc(fmtDate(r.date))+' · '+SLOTS[r.slot]+'<br>Ya hay en esa franja: '+esc((r.with||[]).join(", ")||"—")+'</div></div><div class="row"><button class="btn sm" data-act="vrDel" data-id="'+esc(r.id)+'"'+(S.busy?" disabled":"")+'>Hecha</button></div></div>';});
+  return h+'</div>';
+}
 function dctlCard(){
   var h='<div class="card"><h3>Control de documentos de las valoraciones</h3><p class="muted small">Para cada profesor valorado, mira si su equipo ha subido a la ficha la composición corporal, el PAR-Q (solo en la primera valoración) y la prescripción. Se da por hecho que todos la piden: ignora a quien no la necesite. Se calcula cuando lo pides, así no retrasa la aplicación.</p>';
   if(!S.dctl)return h+'<button class="btn primary" data-act="dctlLoad"'+(S.busy?" disabled":"")+'>Revisar ahora</button></div>';
@@ -1219,7 +1228,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=noticeCard();html+=dctlCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
+  html+=noticeCard();html+=vrCard();html+=dctlCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1283,12 +1292,12 @@ function nowMin(){var d=new Date();return d.getHours()*60+d.getMinutes();}
 function fmtDay(s){var p=s.split("-").map(Number);return new Date(p[0],p[1]-1,p[2]).toLocaleDateString("es-ES",{day:"numeric",month:"long"});}
 function bookDone(r){
   var b=r.booking;
-  return '<div class="card done" role="status"><p class="eyebrow">Reserva hecha</p><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type)+'</span>'+
+  return '<div class="card done" role="status"><p class="eyebrow">Reserva hecha</p><strong>'+esc(b.teacher)+'</strong><span class="badge b-'+b.type+'">'+typeName(b.type,b)+'</span>'+
     '<p>'+esc(fmtDate(b.date))+' · '+bTime(b)+'</p>'+
     '<div class="big">'+(b.type==="V"?"Te valora el equipo ":"Te entrena el equipo ")+b.team+'</div>'+
     (r.members?'<p>'+esc(r.members)+'</p>':'')+
     (b.conf==="pending"?'<p class="small">⏳ El equipo tiene que confirmar la sesión. Si no puede, pasará automáticamente a otro equipo y verás el cambio en «Mis reservas».</p>':'')+
-    (b.type==="V"?'<p class="small">Será normalmente este equipo quien te valore.</p>':'')+
+    (b.type==="V"?'<p class="small">Será normalmente este equipo quien te valore.'+(b.ve?' <strong>Al acabar la valoración, el mismo equipo te entrenará</strong> en lo que queda de la hora.':'')+'</p>':'')+
     '<div class="row" style="margin-top:.6rem"><button class="btn sm" data-act="closeDone">Entendido</button></div></div>';
 }
 function wkTitle(base){
@@ -1312,7 +1321,7 @@ function calCell(c,st){
   var cls="cell "+c.state+(c.mine?" mine":"")+((S.confirmBook&&S.confirmBook.date===c.d&&S.confirmBook.slot===c.s)?" sel":"");
   if(c.state==="na")return '<div class="'+cls+'" aria-label="No disponible"><span class="ct">'+'<span aria-hidden="true">⊘</span></span></div>';
   if(c.state==="past")return '<div class="'+cls+'"><span class="ct">Ya empezó</span></div>';
-  var who=c.list.map(function(b){return esc(b.teacher)+' ('+b.type+')';}).join(", ");
+  var who=c.list.map(function(b){return esc(b.teacher)+' ('+(b.ve?"V+E":b.type)+')';}).join(", ");
   return '<button class="'+cls+'" data-act="pick" data-d="'+c.d+'" data-s="'+c.s+'" aria-label="'+esc(fmtDate(c.d))+', '+SLOTS[c.s]+', '+c.n+' de '+st.cap+' plazas'+(c.mine?', reservada por ti':'')+'">'+
     '<span class="cp">'+c.n+'/'+st.cap+'</span>'+(c.resp?'<span class="cr" title="Profesor responsable"><b class="cr-p">Prof. </b>'+esc(c.resp)+'</span>':'')+(who?'<span class="cn">'+who+'</span>':'')+
     (c.mine?'<span class="ct"><strong>Tuya</strong></span>':(c.state==="full"?'<span class="ct">Completa</span>':(vCount(c.list)>=2?'<span class="ct">Val. completas</span>':'')))+'</button>';
@@ -1339,9 +1348,10 @@ function bookModal(st,today,last,tk){
     '<label for="bk-name" style="margin-top:.2rem">Tu nombre</label><input id="bk-name" data-keep data-change="bkname" autocomplete="off" value="'+esc(S.name)+'" placeholder="Por ejemplo: Laura J."><p class="muted small" style="margin:.3rem 0 0">Escríbelo siempre igual, para que se reconozca tu equipo de valoración.</p>')+
     '<label>¿Qué necesitas?</label><div class="filters">'+
     '<button class="chip" data-act="btype" data-t="V" aria-pressed="'+(S.btype==="V")+'">Valoración (V)</button>'+
-    '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button></div>'+
-    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="V"?(vFull?"<strong>Esta franja ya tiene las 2 valoraciones posibles</strong> (solo se pueden hacer 2 por hora). Elige otra franja o reserva un entrenamiento.":"Solo se hacen 2 valoraciones por franja: tu hora sería la <strong>"+vNext+"</strong>. La valoración la hace siempre el mismo equipo; si ya te valoraron, volverá a ser ese equipo."):"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
-    '<div class="row"><button class="btn cta" data-act="doBook"'+((S.busy||(S.btype==="V"&&vFull))?" disabled":"")+'>'+(S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
+    '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button>'+
+    '<button class="chip" data-act="btype" data-t="VE" aria-pressed="'+(S.btype==="VE")+'">Valoración + entrenamiento</button></div>'+
+    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="VE"?(vCount(c.list)?"<strong>En esta franja ya hay una valoración</strong>, así que no cabe todo en la misma hora. Se enviará una <strong>solicitud al coordinador</strong> y él te confirmará la hora.":"Reservas la franja entera: la <strong>valoración</strong> primero (unos 30 min) y a continuación tu <strong>entrenamiento</strong>, con el mismo equipo."):S.btype==="V"?(vFull?"<strong>Esta franja ya tiene las 2 valoraciones posibles</strong> (solo se pueden hacer 2 por hora). Elige otra franja o reserva un entrenamiento.":"Solo se hacen 2 valoraciones por franja: tu hora sería la <strong>"+vNext+"</strong>. La valoración la hace siempre el mismo equipo; si ya te valoraron, volverá a ser ese equipo."):"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
+    '<div class="row"><button class="btn cta" data-act="doBook"'+((S.busy||(S.btype==="V"&&vFull))?" disabled":"")+'>'+(S.btype==="VE"?(vCount(c.list)?"Enviar solicitud":"Reservar valoración + entrenamiento"):S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
   return h;
 }
 function vReservar(){
@@ -1644,7 +1654,8 @@ var actions={
     }
     run(async function(){
       try{
-        var r=await api("book",{method:"POST",body:Object.assign({type:S.btype,date:c.date,slot:c.slot},who)});
+        var r=await api("book",{method:"POST",body:Object.assign({type:S.btype==="VE"?"V":S.btype,ve:S.btype==="VE",date:c.date,slot:c.slot},who)});
+        if(r.request){S.confirmBook=null;S.scrollTop=true;S.needName=false;say("Solicitud enviada. El coordinador te confirmará la hora de tu valoración + entrenamiento.","ok");await refresh();return;}
         S.tokens[r.booking.id]=r.token;saveTokens();S.lastBook=r;S.confirmBook=null;S.scrollTop=true;S.needName=false;
         if(S.emailMode){S.myTk=r.booking.tkey;lsSet("monasfit.tkey",S.myTk);}
         await refresh();
@@ -1825,6 +1836,12 @@ var actions={
     var g=function(i){var e=document.getElementById(i);return e?e.value:"";},f=S.noticeForm||{};
     var body={id:f.id||"",title:g("nt-title"),text:g("nt-text"),level:g("nt-level"),from:g("nt-from"),to:g("nt-to")};
     run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
+  },
+  vrDel:function(d){run(async function(){var r=await api("vereq-del",{method:"POST",body:{id:d.id}});S.vereq=r.vereq;S.noRestore=true;},"Solicitud quitada.");},
+  tCopyList:function(){
+    var L=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;}).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
+    var t="Profesorado participante ("+L.length+"):\n"+L.map(function(n,i){return (i+1)+". "+n;}).join("\n");
+    try{navigator.clipboard.writeText(t).then(function(){S.msg="Listado copiado: "+L.length+" profesores.";S.msgKind="ok";render();},function(){S.msg="No se pudo copiar. Mira la lista en esta tarjeta.";S.msgKind="err";render();});}catch(e){S.msg="No se pudo copiar.";S.msgKind="err";render();}
   },
   dctlLoad:function(){run(async function(){var r=await api("doc-control");S.dctl=r.rows;},"");},
   dctlCopy:function(){

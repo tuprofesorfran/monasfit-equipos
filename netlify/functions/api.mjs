@@ -33,7 +33,7 @@ const SLOT_START_MIN = [null, 475, 530, 585, 670, 725, 780];
    sub 1 = primeros 30 min; sub 2 = últimos 25 min. */
 const VAL_PER_SLOT = 2, VAL_FIRST_MIN = 30;
 const bStart = (b) => SLOT_START_MIN[b.slot] + (b.type === "V" && b.sub === 2 ? VAL_FIRST_MIN : 0);
-const bEnd = (b) => (b.type === "V" && b.sub === 1 ? SLOT_START_MIN[b.slot] + VAL_FIRST_MIN : SLOT_START_MIN[b.slot] + 55);
+const bEnd = (b) => (b.type === "V" && b.sub === 1 && !b.ve ? SLOT_START_MIN[b.slot] + VAL_FIRST_MIN : SLOT_START_MIN[b.slot] + 55);
 const bRange = (b) => { const h = (m) => Math.floor(m / 60) + ":" + String(m % 60).padStart(2, "0"); return h(bStart(b)) + "–" + h(bEnd(b)); };
 /* Asigna sub a las valoraciones que no lo tienen, por orden de reserva. Devuelve true si cambió algo.
    Las que sobran (3.ª en adelante) quedan con sub 0 = conflicto para que el coordinador las mueva. */
@@ -185,6 +185,7 @@ function cleanBookings(v) {
       reminded: b.reminded === true ? true : undefined,
       confirmedAt: Number(b.confirmedAt) || undefined,
       sub: b.type === "V" && [0, 1, 2].includes(b.sub) ? b.sub : undefined,
+      ve: b.type === "V" && b.ve === true ? true : undefined,
       subst: b.subst === true ? true : undefined,
       auto: b.auto === true ? true : undefined,
       declined: Array.isArray(b.declined) && b.declined.length
@@ -582,8 +583,8 @@ async function dayReminders() {
     const to = byTk[b.tkey];
     if (!to) continue;
     const first = String(b.teacher || "").split(" ")[0];
-    const text = "Hola " + first + ",\n\nTe recordamos que mañana, " + fmtLong(b.date) + ", a las " + hhmm(start) + " tienes reservada tu cita en el Aula Ateca (IES Monastil):\n- " + TYPE_TXT[b.type] + "\n- Franja " + (b.type === "V" ? bRange(b) : SLOT_TXT[b.slot]) + "\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "/#reservar\n\nMonasFIT SALUD - IES MONASTIL";
-    try { await sendMail(to, b.teacher, "Mañana a las " + hhmm(start) + " · " + TYPE_TXT[b.type] + " · MonasFIT Salud", text, { kind: "recordatorio-cita" }); st.sent[b.id] = b.date; dirty = true; sent++; }
+    const text = "Hola " + first + ",\n\nTe recordamos que mañana, " + fmtLong(b.date) + ", a las " + hhmm(start) + " tienes reservada tu cita en el Aula Ateca (IES Monastil):\n- " + typeTxt(b) + "\n- Franja " + (b.type === "V" ? bRange(b) : SLOT_TXT[b.slot]) + "\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "/#reservar\n\nMonasFIT SALUD - IES MONASTIL";
+    try { await sendMail(to, b.teacher, "Mañana a las " + hhmm(start) + " · " + typeTxt(b) + " · MonasFIT Salud", text, { kind: "recordatorio-cita" }); st.sent[b.id] = b.date; dirty = true; sent++; }
     catch (e) { console.log("day reminder", b.id, String(e).slice(0, 160)); }
   }
   if (dirty) await store().setJSON("daystate", st);
@@ -769,6 +770,7 @@ function rateTeams(t, tkey, bookings) {
 /* ---------- Correo al reservar / cancelar, con la cita para el calendario ---------- */
 const SLOT_TXT = [null, "7:55–8:50", "8:50–9:45", "9:45–10:40", "11:10–12:05", "12:05–13:00", "13:00–13:55"];
 const TYPE_TXT = { V: "Valoración corporal", E: "Entrenamiento guiado" };
+const typeTxt = (b) => (b.type === "V" && b.ve ? "Valoración corporal + entrenamiento guiado" : TYPE_TXT[b.type]);
 function icsFor(b, cancel) {
   const ymd = b.date.replace(/-/g, "");
   const hm = (m) => String(Math.floor(m / 60)).padStart(2, "0") + String(m % 60).padStart(2, "0") + "00";
@@ -780,8 +782,8 @@ function icsFor(b, cancel) {
     "BEGIN:STANDARD", "TZOFFSETFROM:+0200", "TZOFFSETTO:+0100", "TZNAME:CET", "DTSTART:19701025T030000", "RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU", "END:STANDARD",
     "END:VTIMEZONE", "BEGIN:VEVENT", "UID:" + b.id + "@monasfit-salud", "DTSTAMP:" + stamp, "SEQUENCE:" + (cancel ? 1 : 0),
     "DTSTART;TZID=Europe/Madrid:" + ymd + "T" + hm(st), "DTEND;TZID=Europe/Madrid:" + ymd + "T" + hm(en),
-    "SUMMARY:" + (cancel ? "CANCELADA · " : "") + "MonasFIT Salud · " + TYPE_TXT[b.type],
-    "LOCATION:Aula Ateca · IES Monastil", "DESCRIPTION:" + TYPE_TXT[b.type] + " en el proyecto MonasFIT Salud.",
+    "SUMMARY:" + (cancel ? "CANCELADA · " : "") + "MonasFIT Salud · " + typeTxt(b),
+    "LOCATION:Aula Ateca · IES Monastil", "DESCRIPTION:" + typeTxt(b) + " en el proyecto MonasFIT Salud.",
     "STATUS:" + (cancel ? "CANCELLED" : "CONFIRMED")];
   if (!cancel) L.push("BEGIN:VALARM", "TRIGGER:-PT60M", "ACTION:DISPLAY", "DESCRIPTION:MonasFIT Salud en 1 hora", "END:VALARM");
   L.push("END:VEVENT", "END:VCALENDAR");
@@ -796,9 +798,9 @@ async function bookingMail(kind, b, to, name) {
     const cancel = kind === "cancel";
     const quando = fmtLong(b.date) + ", " + (b.type === "V" ? bRange(b) : SLOT_TXT[b.slot]);
     const text = cancel
-      ? "Hola " + first + ",\n\nTu reserva queda cancelada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n\nSi quieres otra hora, puedes reservarla aquí: " + SITE_URL() + "\n\nMonasFIT SALUD - IES MONASTIL"
-      : "Hola " + first + ",\n\nTu reserva está registrada:\n- " + TYPE_TXT[b.type] + "\n- " + quando + "\n- Lugar: Aula Ateca (IES Monastil)\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "\n\nAdjuntamos un archivo para añadirla a tu calendario.\n\nMonasFIT SALUD - IES MONASTIL";
-    await sendMail(to, name || b.teacher, (cancel ? "Reserva cancelada · " : "Reserva registrada · ") + TYPE_TXT[b.type] + " · " + fmtLong(b.date), text, { ics: icsFor(b, cancel), icsName: cancel ? "cita-cancelada.ics" : "cita-monasfit.ics", kind: cancel ? "cancelacion" : "reserva" });
+      ? "Hola " + first + ",\n\nTu reserva queda cancelada:\n- " + typeTxt(b) + "\n- " + quando + "\n\nSi quieres otra hora, puedes reservarla aquí: " + SITE_URL() + "\n\nMonasFIT SALUD - IES MONASTIL"
+      : "Hola " + first + ",\n\nTu reserva está registrada:\n- " + typeTxt(b) + "\n- " + quando + "\n- Lugar: Aula Ateca (IES Monastil)\n\nSi no puedes venir, cancélala desde la app, en el mismo dispositivo donde reservaste, para que otro compañero pueda usar la hora: " + SITE_URL() + "\n\nAdjuntamos un archivo para añadirla a tu calendario.\n\nMonasFIT SALUD - IES MONASTIL";
+    await sendMail(to, name || b.teacher, (cancel ? "Reserva cancelada · " : "Reserva registrada · ") + typeTxt(b) + " · " + fmtLong(b.date), text, { ics: icsFor(b, cancel), icsName: cancel ? "cita-cancelada.ics" : "cita-monasfit.ics", kind: cancel ? "cancelacion" : "reserva" });
   } catch (e) { console.log("booking mail", String(e).slice(0, 160)); }
 }
 async function book(b) {
@@ -807,6 +809,7 @@ async function book(b) {
   const slot = int(b && b.slot, 1, 6);
   if (!["E", "V"].includes(type)) fail("Elige entrenamiento o valoración.");
   if (!validDate(date) || !slot) fail("Fecha o franja no válida.");
+  const ve = !!(b && b.ve) && type === "V"; // valoración + entrenamiento en la misma franja
 
   await runSweep();
   let mailTo = "";
@@ -859,17 +862,30 @@ async function book(b) {
     const here = list.filter((x) => x.date === date && x.slot === slot);
     if (here.length >= st.cap) fail("Esa franja está completa.");
     assignSubs(list);
+    if (type === "V" && !ve && here.some((x) => x.type === "V" && x.ve)) fail("En esa franja ya hay una valoración con entrenamiento, que ocupa toda la hora.");
     let newSub = 0;
     if (type === "V") {
       const usedSub = new Set(here.filter((x) => x.type === "V" && (x.sub === 1 || x.sub === 2)).map((x) => x.sub));
       newSub = [1, 2].find((n) => !usedSub.has(n)) || 0;
-      if (!newSub) fail("En esa franja ya hay 2 valoraciones (solo se pueden hacer 2 por hora). Elige otra franja.");
+      if (!newSub && !ve) fail("En esa franja ya hay 2 valoraciones (solo se pueden hacer 2 por hora). Elige otra franja.");
     }
 
     const tdata = { ...teachers.data };
     const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true, ...(newEmail ? { self: true, joined: now.date } : {}) };
     let teachersDirty = !tdata[tk];
     if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
+    // Valoración + entrenamiento: ocupa la franja entera. Si ya hay una valoración en esa hora no cabe todo,
+    // así que no se reserva: se deja una solicitud para que el coordinador la resuelva desde Gestión.
+    if (ve && here.some((x) => x.type === "V")) {
+      tdata[tk] = t;
+      if (teachersDirty) await write("teachers", teachers, tdata);
+      if (newEmail) await write("emails", emails, { ...emails.data, [newEmail]: tk });
+      const reqs = (await store().get("vereq", { type: "json" })) || [];
+      if (reqs.some((x) => x.tkey === tk && x.date === date && x.slot === slot)) fail("Ya has enviado una solicitud para esa franja. El coordinador te confirmará la hora.");
+      reqs.push({ id: randomBytes(5).toString("hex"), tkey: tk, teacher: name, date, slot, at: Date.now(), with: here.filter((x) => x.type === "V").map((x) => x.teacher) });
+      await store().setJSON("vereq", reqs.slice(-200));
+      return { ok: true, request: true };
+    }
     // Profesor nuevo: primero valoración y prescripción; hasta entonces no puede reservar entrenamiento guiado.
     if (type === "E" && t.needsVal) {
       const pr = await store().get("prescriptions/" + tk, { type: "json" });
@@ -887,7 +903,7 @@ async function book(b) {
     tdata[tk] = t;
 
     const id = randomBytes(5).toString("hex") + Date.now().toString(36);
-    const nb = { id, date, slot, type, teacher: t.name || name, tkey: tk, team: null, createdAt: Date.now(), ...(type === "V" ? { sub: newSub } : {}) };
+    const nb = { id, date, slot, type, teacher: t.name || name, tkey: tk, team: null, createdAt: Date.now(), ...(type === "V" ? { sub: newSub } : {}), ...(ve ? { ve: true } : {}) };
     const all = [...list, nb];
     const ptr = Math.min(TEAMS, Math.max(1, Number(cfg.data.nextTeam) || 1));
     const plan = planAssign(all, tdata, ptr, new Set([id]));
@@ -903,7 +919,7 @@ async function book(b) {
     const tm = teams.data[nb.team];
     return { ok: true, token, booking: nb, members: (tm && tm.members) || "" };
   });
-  await bookingMail("book", res.booking, mailTo, res.booking.teacher);
+  if (!res.request) await bookingMail("book", res.booking, mailTo, res.booking.teacher);
   return res;
 }
 
@@ -1146,6 +1162,14 @@ async function fichaRoutes(route, req, url, admin) {
     const id = str(b && b.id, 40);
     await store().setJSON("notices", (await readNotices()).filter((x) => x.id !== id));
     return json({ ok: true, notices: await noticesFor(true) });
+  }
+  if (route === "vereq-del" && req.method === "POST") {
+    if (!admin) fail("Solo el coordinador.");
+    const b = await readJson(req);
+    const id = str(b && b.id, 40);
+    const list = ((await store().get("vereq", { type: "json" })) || []).filter((x) => x.id !== id);
+    await store().setJSON("vereq", list);
+    return json({ vereq: list });
   }
   if (route === "doc-control" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
@@ -1591,7 +1615,8 @@ const handle = async (req) => {
       const pKeys = admin ? s.list({ prefix: "keys/" }) : null;
       const pRate = s.list({ prefix: "ratings/" }).then(async (rl) => ({ rl, rr: await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" }))) }));
       const pNot = noticesFor(admin);
-      [pPres, pTK, pEm, pKeys, pRate, pNot].forEach((x) => x && x.catch && x.catch(() => {}));
+      const pVr = admin ? s.get("vereq", { type: "json" }) : null;
+      [pPres, pTK, pEm, pKeys, pRate, pNot, pVr].forEach((x) => x && x.catch && x.catch(() => {}));
       const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
       const recs = await pPres;
       const prescriptions = {};
@@ -1634,7 +1659,7 @@ const handle = async (req) => {
         return { team: Number(t), avg: parts.reduce((x, y) => x + y, 0) / parts.length, vAvg, eAvg, nV: a.V.length, nE: a.E.length, n: a.V.length + a.E.length };
       }).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
       const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
-      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await pNot });
+      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await pNot, ...(admin ? { vereq: (await pVr) || [] } : {}) });
     }
 
     {
