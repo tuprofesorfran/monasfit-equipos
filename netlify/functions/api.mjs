@@ -862,30 +862,20 @@ async function book(b) {
     const here = list.filter((x) => x.date === date && x.slot === slot);
     if (here.length >= st.cap) fail("Esa franja está completa.");
     assignSubs(list);
-    if (type === "V" && !ve && here.some((x) => x.type === "V" && x.ve)) fail("En esa franja ya hay una valoración con entrenamiento, que ocupa toda la hora.");
+    // Valoración + entrenamiento ocupa la franja entera: solo si en ella hay únicamente entrenamientos.
+    if (ve && here.some((x) => x.type === "V")) fail("En esa franja ya hay una valoración, así que no cabe valoración + entrenamiento. Elige otra franja.");
+    if (type === "V" && here.some((x) => x.type === "V" && x.ve)) fail("En esa franja ya hay una valoración con entrenamiento, que ocupa toda la hora.");
     let newSub = 0;
     if (type === "V") {
       const usedSub = new Set(here.filter((x) => x.type === "V" && (x.sub === 1 || x.sub === 2)).map((x) => x.sub));
       newSub = [1, 2].find((n) => !usedSub.has(n)) || 0;
-      if (!newSub && !ve) fail("En esa franja ya hay 2 valoraciones (solo se pueden hacer 2 por hora). Elige otra franja.");
+      if (!newSub) fail("En esa franja ya hay 2 valoraciones (solo se pueden hacer 2 por hora). Elige otra franja.");
     }
 
     const tdata = { ...teachers.data };
     const t = tdata[tk] ? { ...tdata[tk] } : { tkey: tk, name, valTeam: null, course: courseNow(), archived: false, needsVal: true, ...(newEmail ? { self: true, joined: now.date } : {}) };
     let teachersDirty = !tdata[tk];
     if (t.archived) { t.archived = false; t.course = courseNow(); teachersDirty = true; }
-    // Valoración + entrenamiento: ocupa la franja entera. Si ya hay una valoración en esa hora no cabe todo,
-    // así que no se reserva: se deja una solicitud para que el coordinador la resuelva desde Gestión.
-    if (ve && here.some((x) => x.type === "V")) {
-      tdata[tk] = t;
-      if (teachersDirty) await write("teachers", teachers, tdata);
-      if (newEmail) await write("emails", emails, { ...emails.data, [newEmail]: tk });
-      const reqs = (await store().get("vereq", { type: "json" })) || [];
-      if (reqs.some((x) => x.tkey === tk && x.date === date && x.slot === slot)) fail("Ya has enviado una solicitud para esa franja. El coordinador te confirmará la hora.");
-      reqs.push({ id: randomBytes(5).toString("hex"), tkey: tk, teacher: name, date, slot, at: Date.now(), with: here.filter((x) => x.type === "V").map((x) => x.teacher) });
-      await store().setJSON("vereq", reqs.slice(-200));
-      return { ok: true, request: true };
-    }
     // Profesor nuevo: primero valoración y prescripción; hasta entonces no puede reservar entrenamiento guiado.
     if (type === "E" && t.needsVal) {
       const pr = await store().get("prescriptions/" + tk, { type: "json" });
@@ -919,7 +909,7 @@ async function book(b) {
     const tm = teams.data[nb.team];
     return { ok: true, token, booking: nb, members: (tm && tm.members) || "" };
   });
-  if (!res.request) await bookingMail("book", res.booking, mailTo, res.booking.teacher);
+  await bookingMail("book", res.booking, mailTo, res.booking.teacher);
   return res;
 }
 
@@ -1162,14 +1152,6 @@ async function fichaRoutes(route, req, url, admin) {
     const id = str(b && b.id, 40);
     await store().setJSON("notices", (await readNotices()).filter((x) => x.id !== id));
     return json({ ok: true, notices: await noticesFor(true) });
-  }
-  if (route === "vereq-del" && req.method === "POST") {
-    if (!admin) fail("Solo el coordinador.");
-    const b = await readJson(req);
-    const id = str(b && b.id, 40);
-    const list = ((await store().get("vereq", { type: "json" })) || []).filter((x) => x.id !== id);
-    await store().setJSON("vereq", list);
-    return json({ vereq: list });
   }
   if (route === "doc-control" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
@@ -1615,8 +1597,7 @@ const handle = async (req) => {
       const pKeys = admin ? s.list({ prefix: "keys/" }) : null;
       const pRate = s.list({ prefix: "ratings/" }).then(async (rl) => ({ rl, rr: await Promise.all(rl.blobs.map((b) => s.get(b.key, { type: "json" }))) }));
       const pNot = noticesFor(admin);
-      const pVr = admin ? s.get("vereq", { type: "json" }) : null;
-      [pPres, pTK, pEm, pKeys, pRate, pNot, pVr].forEach((x) => x && x.catch && x.catch(() => {}));
+      [pPres, pTK, pEm, pKeys, pRate, pNot].forEach((x) => x && x.catch && x.catch(() => {}));
       const [cfg, teams, teachers, bookings, settings] = await Promise.all(KEYS.map(read));
       const recs = await pPres;
       const prescriptions = {};
@@ -1659,7 +1640,7 @@ const handle = async (req) => {
         return { team: Number(t), avg: parts.reduce((x, y) => x + y, 0) / parts.length, vAvg, eAvg, nV: a.V.length, nE: a.E.length, n: a.V.length + a.E.length };
       }).sort((x, y) => y.avg - x.avg || y.n - x.n || x.team - y.team);
       const bookingsOut = admin ? bookings : { ...bookings, data: bookings.data.map((x) => (x.declined ? { ...x, declined: undefined, dn: x.declined.length } : x)) };
-      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await pNot, ...(admin ? { vereq: (await pVr) || [] } : {}) });
+      return json({ config: cfg, teams, teachers, bookings: bookingsOut, settings, prescriptions, admin, keys, emailMode, emails: emailList, ratings, ranking, teamKeysSet, notices: await pNot });
     }
 
     {

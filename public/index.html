@@ -364,6 +364,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
+/* v1.46.3 VE solo en franjas sin valoración */
 /* v1.46.2 Listado de profesorado */
 /* v1.46.1 Valoración + entrenamiento en la misma franja */
 /* v1.45.5 Nombres en el podio */
@@ -477,7 +478,7 @@ async function api(path,opts){
 }
 function applyState(d){
     S.needCode=false;S.err="";
-    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];S.vereq=d.vereq||[];
+    S.config=d.config.data||{nextTeam:1};S.teams=d.teams.data||{};S.teachers=d.teachers.data||{};S.bookings=d.bookings.data||[];S.prescriptions=d.prescriptions||{};S.keys=d.keys||{};S.emailMode=!!d.emailMode;S.emails=d.emails||{};S.ratings=d.ratings||[];S.ranking=d.ranking||[];S.teamKeysSet=d.teamKeysSet||{};S.notices=d.notices||[];
     if(!S.admin&&S.team&&S.teamKeysSet[S.team]&&!S.teamKeys[S.team]){S.askTeam=S.team;S.team=null;}
     S.settings=(d.settings&&d.settings.data)||DEF_SET;
     var ids={};S.bookings.forEach(function(b){ids[b.id]=1;});var ch=false;
@@ -1125,13 +1126,6 @@ function noticeCard(){
 }
 var ANEC_K=[["asistencia","Asistencia"],["puntualidad","Puntualidad"],["entrenamiento","Entrenamiento / prescripción"],["actitud","Actitud y trabajo en equipo"],["positivo","Aspecto positivo"],["otro","Otro"]];
 function anecLbl(k){var r=ANEC_K.filter(function(x){return x[0]===k;})[0];return r?r[1]:"Otro";}
-function vrCard(){
-  var L=(S.vereq||[]).slice().sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:a.slot-b.slot;});
-  var h='<div class="card"><h3>Solicitudes de valoración + entrenamiento ('+L.length+')</h3><p class="muted small">Profesores que han pedido valoración y entrenamiento en una hora donde ya hay otra valoración, así que no cabía todo. Decide tú cómo cuadrarlo y pulsa «Hecha».</p>';
-  if(!L.length)return h+'<p class="muted small">No hay solicitudes pendientes.</p></div>';
-  L.forEach(function(r){h+='<div class="list-row"><div class="what"><strong>'+esc(r.teacher)+'</strong><div class="small muted">'+esc(fmtDate(r.date))+' · '+SLOTS[r.slot]+'<br>Ya hay en esa franja: '+esc((r.with||[]).join(", ")||"—")+'</div></div><div class="row"><button class="btn sm" data-act="vrDel" data-id="'+esc(r.id)+'"'+(S.busy?" disabled":"")+'>Hecha</button></div></div>';});
-  return h+'</div>';
-}
 function dctlCard(){
   var h='<div class="card"><h3>Control de documentos de las valoraciones</h3><p class="muted small">Para cada profesor valorado, mira si su equipo ha subido a la ficha la composición corporal, el PAR-Q (solo en la primera valoración) y la prescripción. Se da por hecho que todos la piden: ignora a quien no la necesite. Se calcula cuando lo pides, así no retrasa la aplicación.</p>';
   if(!S.dctl)return h+'<button class="btn primary" data-act="dctlLoad"'+(S.busy?" disabled":"")+'>Revisar ahora</button></div>';
@@ -1228,7 +1222,7 @@ function vAdmin(){
       return '<div class="list-row" style="flex-wrap:wrap"><span><strong>'+esc(t.name)+'</strong><br><small class="muted">'+esc(emOf[k]||"sin correo")+' · alta el '+shortDate(t.joined)+'</small></span><span class="due '+(t.valTeam?'due-booked':'due-soon')+'">'+(t.valTeam?'Equipo '+t.valTeam:'Sin equipo asignado')+'</span></div>';}).join("")+'</div>';
   })();
   html+=mailCard();
-  html+=noticeCard();html+=vrCard();html+=dctlCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
+  html+=noticeCard();html+=dctlCard();html+=anecCard();html+=weeklyCard();html+=backupCard();html+=docSumCard();
   html+=dueList(activeKeys(),"Valoraciones que tocan","Profesores a los que les toca (o les va a tocar en 7 días) la valoración de las 4 semanas y aún no tienen cita.");
   html+='<div class="card"><h3>Rotación de entrenamientos</h3>'+
     '<p class="muted small">Cada reserva nueva se asigna al equipo libre con menos sesiones (si empatan, sigue el orden de rotación). El equipo debe confirmar en su pestaña; si dice que no o no responde 12 h antes, pasa al siguiente. Las valoraciones las hace el equipo habitual del profesor; si ese equipo no puede, las hace otro ese día.</p>'+
@@ -1350,8 +1344,8 @@ function bookModal(st,today,last,tk){
     '<button class="chip" data-act="btype" data-t="V" aria-pressed="'+(S.btype==="V")+'">Valoración (V)</button>'+
     '<button class="chip" data-act="btype" data-t="E" aria-pressed="'+(S.btype==="E")+'">Entrenamiento (E)</button>'+
     '<button class="chip" data-act="btype" data-t="VE" aria-pressed="'+(S.btype==="VE")+'">Valoración + entrenamiento</button></div>'+
-    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="VE"?(vCount(c.list)?"<strong>En esta franja ya hay una valoración</strong>, así que no cabe todo en la misma hora. Se enviará una <strong>solicitud al coordinador</strong> y él te confirmará la hora.":"Reservas la franja entera: la <strong>valoración</strong> primero (unos 30 min) y a continuación tu <strong>entrenamiento</strong>, con el mismo equipo."):S.btype==="V"?(vFull?"<strong>Esta franja ya tiene las 2 valoraciones posibles</strong> (solo se pueden hacer 2 por hora). Elige otra franja o reserva un entrenamiento.":"Solo se hacen 2 valoraciones por franja: tu hora sería la <strong>"+vNext+"</strong>. La valoración la hace siempre el mismo equipo; si ya te valoraron, volverá a ser ese equipo."):"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
-    '<div class="row"><button class="btn cta" data-act="doBook"'+((S.busy||(S.btype==="V"&&vFull))?" disabled":"")+'>'+(S.btype==="VE"?(vCount(c.list)?"Enviar solicitud":"Reservar valoración + entrenamiento"):S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
+    '<p class="muted small" style="margin:.4rem 0 .7rem">'+(S.btype==="VE"?(vCount(c.list)?"<strong>En esta franja ya hay una valoración</strong>, así que no cabe valoración + entrenamiento en la misma hora. Elige otra franja, o reserva solo entrenamiento.":"Reservas la franja entera: la <strong>valoración</strong> primero (unos 30 min) y a continuación tu <strong>entrenamiento</strong>, con el mismo equipo."):S.btype==="V"?(vFull?"<strong>Esta franja ya tiene las 2 valoraciones posibles</strong> (solo se pueden hacer 2 por hora). Elige otra franja o reserva un entrenamiento.":"Solo se hacen 2 valoraciones por franja: tu hora sería la <strong>"+vNext+"</strong>. La valoración la hace siempre el mismo equipo; si ya te valoraron, volverá a ser ese equipo."):"El entrenamiento guiado va rotando entre los equipos. Al reservar verás cuál te toca.")+'</p>'+
+    '<div class="row"><button class="btn cta" data-act="doBook"'+((S.busy||(S.btype==="V"&&vFull)||(S.btype==="VE"&&vCount(c.list)>0))?" disabled":"")+'>'+(S.btype==="VE"?"Reservar valoración + entrenamiento":S.btype==="V"?"Reservar valoración":"Reservar entrenamiento")+'</button><button class="btn" data-act="noBook">Cancelar</button></div></div></div>';
   return h;
 }
 function vReservar(){
@@ -1655,7 +1649,6 @@ var actions={
     run(async function(){
       try{
         var r=await api("book",{method:"POST",body:Object.assign({type:S.btype==="VE"?"V":S.btype,ve:S.btype==="VE",date:c.date,slot:c.slot},who)});
-        if(r.request){S.confirmBook=null;S.scrollTop=true;S.needName=false;say("Solicitud enviada. El coordinador te confirmará la hora de tu valoración + entrenamiento.","ok");await refresh();return;}
         S.tokens[r.booking.id]=r.token;saveTokens();S.lastBook=r;S.confirmBook=null;S.scrollTop=true;S.needName=false;
         if(S.emailMode){S.myTk=r.booking.tkey;lsSet("monasfit.tkey",S.myTk);}
         await refresh();
@@ -1836,12 +1829,6 @@ var actions={
     var g=function(i){var e=document.getElementById(i);return e?e.value:"";},f=S.noticeForm||{};
     var body={id:f.id||"",title:g("nt-title"),text:g("nt-text"),level:g("nt-level"),from:g("nt-from"),to:g("nt-to")};
     run(async function(){var r=await api("notice-save",{method:"POST",body:body});S.notices=r.notices;S.noticeForm=null;S.noRestore=true;},"Aviso guardado. Ya lo ve quien abra la app.");
-  },
-  vrDel:function(d){run(async function(){var r=await api("vereq-del",{method:"POST",body:{id:d.id}});S.vereq=r.vereq;S.noRestore=true;},"Solicitud quitada.");},
-  tCopyList:function(){
-    var L=Object.keys(S.teachers).filter(function(k){return !S.teachers[k].archived;}).map(function(k){return S.teachers[k].name;}).sort(function(a,b){return a.localeCompare(b,"es");});
-    var t="Profesorado participante ("+L.length+"):\n"+L.map(function(n,i){return (i+1)+". "+n;}).join("\n");
-    try{navigator.clipboard.writeText(t).then(function(){S.msg="Listado copiado: "+L.length+" profesores.";S.msgKind="ok";render();},function(){S.msg="No se pudo copiar. Mira la lista en esta tarjeta.";S.msgKind="err";render();});}catch(e){S.msg="No se pudo copiar.";S.msgKind="err";render();}
   },
   dctlLoad:function(){run(async function(){var r=await api("doc-control");S.dctl=r.rows;},"");},
   dctlCopy:function(){
