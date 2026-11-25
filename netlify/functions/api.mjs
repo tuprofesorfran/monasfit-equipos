@@ -405,11 +405,14 @@ async function sendMail(to, name, subject, text, opts) {
   try { const lm = await store().get("logo.meta", { type: "json" }); if (lm) logo = "<p style=\"margin:18px 0 0\"><img src=\"" + SITE_URL() + "/api/logo?v=" + (lm.at || lm.updated || "1") + "\" alt=\"MonasFIT Salud\" width=\"96\" height=\"96\" style=\"display:block;border-radius:14px\"></p>"; } catch {}
   const html = "<div style=\"font-family:Arial,sans-serif;font-size:15px;color:#1b3550;max-width:560px\">" + text.split("\n\n").map((p) => "<p>" + link(esc(p).replace(/\n/g, "<br>")) + "</p>").join("") + logo + "</div>";
   const kind = (opts && opts.kind) || "otro";
+  const atts = [];
+  if (opts && opts.ics) atts.push({ name: opts.icsName || "cita.ics", content: Buffer.from(opts.ics, "utf8").toString("base64") });
+  if (opts && opts.files) for (const f of opts.files) atts.push({ name: f.name, content: Buffer.from(f.buf).toString("base64") });
   let r, err = "";
   try {
     r = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST", headers: { "api-key": process.env.BREVO_API_KEY, "content-type": "application/json", accept: "application/json" },
-      body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text, ...(opts && opts.ics ? { attachment: [{ name: opts.icsName || "cita.ics", content: Buffer.from(opts.ics, "utf8").toString("base64") }] } : {}) }),
+      body: JSON.stringify({ sender: { name: "MonasFIT Salud", email: process.env.MAIL_SENDER }, to: [{ email: to, name: name || undefined }], subject, htmlContent: html, textContent: text, ...(atts.length ? { attachment: atts } : {}) }),
     });
     if (!r.ok) err = "Brevo " + r.status + " " + (await r.text().catch(() => "")).slice(0, 200);
   } catch (e) { err = String(e.message || e).slice(0, 200); }
@@ -1016,6 +1019,25 @@ async function fichaAccess(req, tkey, admin) {
   fail("No tienes acceso a esta ficha.");
 }
 
+// Envía al correo del profesor el documento que acaban de subir a su ficha. Devuelve el correo si se envió.
+const MAIL_DOC_MAX = 2.8 * 1024 * 1024; // Brevo admite ~4 MB por correo y el adjunto engorda un tercio al codificarse
+const CAT_TXT = { valoracion: "valoración corporal", parq: "PAR-Q", prescripcion: "prescripción de entrenamiento", otro: "documento" };
+async function mailDocToTeacher(tkey, doc) {
+  if (!process.env.BREVO_API_KEY || !process.env.MAIL_SENDER) return "";
+  const emails = await read("emails");
+  const to = Object.keys(emails.data).find((e) => emails.data[e] === tkey);
+  if (!to) return "";
+  const teachers = await read("teachers");
+  const t = teachers.data[tkey] || {};
+  const first = String(t.name || "").split(" ")[0];
+  const what = CAT_TXT[doc.cat] || CAT_TXT.otro;
+  const attach = doc.buf.byteLength <= MAIL_DOC_MAX;
+  const text = "Hola " + first + ",\n\nEl alumnado de MonasFIT Salud ha subido a tu ficha: " + what + " (" + doc.name + ").\n\n" +
+    (attach ? "Te lo adjuntamos en este correo. También lo tienes siempre en tu ficha, en la pestaña Profesorado de la aplicación:" : "El archivo es demasiado grande para adjuntarlo, pero puedes descargarlo desde tu ficha, en la pestaña Profesorado de la aplicación:") +
+    "\n\n" + SITE_URL() + "\n\nEste documento contiene datos de salud: guárdalo en un lugar seguro y no lo reenvíes.\n\nMonasFIT SALUD - IES MONASTIL";
+  await sendMail(to, t.name, "MonasFIT Salud: nuevo documento en tu ficha (" + what + ")", text, { kind: "documento", ...(attach ? { files: [{ name: doc.name, buf: doc.buf }] } : {}) });
+  return to;
+}
 const EMPTY_FICHA = () => ({ valoraciones: [], entrevista: {}, docs: [], updatedAt: 0 });
 const readFicha = async (tkey) => {
   const f = await store().get("ficha/" + tkey, { type: "json" });
@@ -1376,7 +1398,12 @@ async function fichaRoutes(route, req, url, admin) {
       await store().set("docs/" + tkey + "/" + id, buf);
       const rec = { ...old, docs: [...old.docs, { id, name, ext, size: buf.byteLength, at: Date.now(), by: role, ...(cat ? { cat } : {}) }], updatedAt: Date.now() };
       await store().setJSON("ficha/" + tkey, rec);
-      return json({ role, ficha: rec });
+      // Si lo sube el alumnado (o el coordinador), el documento también le llega al profesor a su correo corporativo.
+      let mailed = "";
+      if (role !== "key") {
+        try { mailed = await mailDocToTeacher(tkey, { name, ext, cat, buf }); } catch (e) { mailed = ""; }
+      }
+      return json({ role, ficha: rec, mailed });
     });
   }
   if (route === "doc" && req.method === "GET") {

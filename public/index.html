@@ -364,6 +364,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
+/* v1.47.0 Documentos al correo del profesor */
 /* v1.46.3 VE solo en franjas sin valoración */
 /* v1.46.2 Listado de profesorado */
 /* v1.46.1 Valoración + entrenamiento en la misma franja */
@@ -1908,8 +1909,8 @@ var changes={
     run(async function(){
       var buf=await f.arrayBuffer();
       var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
-      S.fdata.ficha=r.ficha;S.noRestore=true;
-    },"Documento subido.");
+      S.fdata.ficha=r.ficha;S.noRestore=true;return r;
+    },function(r){var role=S.fdata&&S.fdata.role;return "Documento subido."+(r&&r.mailed?" Se ha enviado también al correo del profesor.":(role==="key"?"":" El profesor no tiene correo registrado, o el envío no se pudo hacer."));});
   },
   tdoc:function(el){
     var f=el.files&&el.files[0];if(!f)return;
@@ -1920,9 +1921,9 @@ var changes={
     var who=S.teachers[k]?S.teachers[k].name:"";
     run(async function(){
       var buf=await f.arrayBuffer();
-      await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
-      S.noRestore=true;
-    },"Documento subido"+(who?" a la ficha de "+who:"")+".");
+      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
+      S.noRestore=true;return r;
+    },function(r){return "Documento subido"+(who?" a la ficha de "+who:"")+"."+(r&&r.mailed?" Se ha enviado también a su correo.":" No se ha podido enviar a su correo (no tiene o falló el envío).");});
   },
   docCat:function(el){var k=S.fk,id=el.dataset.id,c=el.value;if(!c){render();return;}run(async function(){var r=await api("doc-cat",{method:"POST",headers:fHeaders(k),body:{tkey:k,id:id,cat:c}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Tipo de documento cambiado.");},
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
