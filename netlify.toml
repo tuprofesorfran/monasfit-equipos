@@ -1,6 +1,9 @@
 [build]
   publish = "public"
 
+  [build.environment]
+    SECRETS_SCAN_OMIT_PATHS = "public/vendor/**"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
