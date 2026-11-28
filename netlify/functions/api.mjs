@@ -1071,12 +1071,118 @@ function cleanEntrevista(v) {
 
 async function readJson(req) { try { return await req.json(); } catch { fail("Petición no válida."); } }
 
+// ---- Ranking MonasFIT (datos de la báscula Tanita leídos en el navegador al subir el PDF) ----
+const rnum = (v, a, b) => { const n = Number(v); return Number.isFinite(n) && n >= a && n <= b ? Math.round(n * 100) / 100 : null; };
+function cleanTanita(raw) {
+  let o;
+  try { o = JSON.parse(Buffer.from(String(raw).replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")); } catch { return null; }
+  if (!o || typeof o !== "object") return null;
+  const row = (r) => (r && rnum(r.peso, 20, 300) != null && rnum(r.musculo, 10, 200) != null && rnum(r.grasa, 1, 70) != null
+    ? { peso: rnum(r.peso, 20, 300), musculo: rnum(r.musculo, 10, 200), grasa: rnum(r.grasa, 1, 70) } : null);
+  const rows = (Array.isArray(o.r) ? o.r : []).slice(0, 13).map((r) => { const x = row(r); return x && validDate(str(r.date, 10)) ? { date: r.date, ...x } : null; }).filter(Boolean);
+  const last = { date: validDate(str(o.d, 10)) ? o.d : "", peso: rnum(o.p, 20, 300), grasa: rnum(o.g, 1, 70), musculo: rnum(o.m, 10, 200), edadMet: rnum(o.a, 5, 100), visc: rnum(o.v, 1, 59) };
+  if (!last.date || last.peso == null || last.grasa == null || last.musculo == null) return null;
+  return { age: rnum(o.e, 10, 100), init: row(o.i), rows, last };
+}
+function mergeTanita(old, nu) {
+  const o = old || { rows: [], init: null, last: null };
+  const map = {};
+  for (const r of o.rows || []) map[r.date] = r;
+  for (const r of nu.rows) map[r.date] = r;
+  const rows = Object.values(map).sort((a, b) => (a.date < b.date ? -1 : 1)).slice(-60);
+  const init = o.init || nu.init || (rows[0] ? { peso: rows[0].peso, musculo: rows[0].musculo, grasa: rows[0].grasa } : null);
+  const last = !o.last || nu.last.date >= o.last.date ? nu.last : o.last;
+  return { rows, init, last, age: nu.age || o.age || null, at: Date.now() };
+}
+const RANK_TTL = 6 * 3600000;
+const RANK_CATS = [
+  { id: "musculo", title: "Más masa muscular ganada", unit: "" },
+  { id: "grasa", title: "Más grasa reducida", unit: "" },
+  { id: "entrenos", title: "Más entrenamientos realizados", unit: "entrenamientos" },
+  { id: "constante", title: "Más constante en las valoraciones", unit: "valoraciones" },
+];
+async function computeRanking() {
+  const [teachers, bookings] = await Promise.all([read("teachers"), read("bookings")]);
+  const now = madridNow();
+  const entries = { musculo: [], grasa: [], entrenos: [], constante: [] };
+  let n = 0;
+  await Promise.all(Object.keys(teachers.data).map(async (tk) => {
+    const t = teachers.data[tk];
+    if (!t || t.archived) return;
+    const f = await store().get("ficha/" + tk, { type: "json" });
+    if (!f || !f.rank || !f.rank.on) return;
+    n++;
+    const tn = f.tanita;
+    if (tn && tn.init && tn.rows && tn.rows.length) {
+      const lastRow = tn.rows[tn.rows.length - 1];
+      const dm = (lastRow.musculo - tn.init.musculo) / tn.init.musculo * 100;
+      const dg = tn.init.grasa - lastRow.grasa;
+      if (dm > 0.05) entries.musculo.push({ tk, name: t.name, v: dm });
+      if (dg > 0.05) entries.grasa.push({ tk, name: t.name, v: dg });
+      if (tn.rows.length >= 2) entries.constante.push({ tk, name: t.name, v: tn.rows.length });
+    }
+    const ent = bookings.data.filter((b) => b.tkey === tk && b.type === "E" && b.team && b.conf !== "pending" && (b.date < now.date || (b.date === now.date && bEnd(b) <= now.min))).length;
+    if (ent > 0) entries.entrenos.push({ tk, name: t.name, v: ent });
+  }));
+  const cats = {};
+  for (const id of Object.keys(entries)) {
+    const L = entries[id].sort((a, b) => b.v - a.v || String(a.name).localeCompare(String(b.name), "es"));
+    cats[id] = L.map((e) => ({ tk: e.tk, name: e.name, v: Math.round(e.v * 100) / 100, pos: 1 + L.filter((x) => x.v > e.v).length }));
+  }
+  const rec = { at: Date.now(), n, cats };
+  await store().setJSON("rankcache", rec);
+  return rec;
+}
+async function rankView(tk, admin) {
+  let c = await store().get("rankcache", { type: "json" });
+  if (!c || Date.now() - c.at > RANK_TTL) c = await computeRanking();
+  const out = RANK_CATS.map((cat) => {
+    const L = c.cats[cat.id] || [];
+    const top = L.filter((e) => e.pos <= 3).map((e) => ({ pos: e.pos, name: e.name }));
+    const mine = tk ? L.find((e) => e.tk === tk) : null;
+    let me = null;
+    if (mine) {
+      me = { pos: mine.pos };
+      if ((cat.id === "entrenos" || cat.id === "constante") && mine.pos > 3) {
+        const minPod = Math.min(...L.filter((e) => e.pos <= 3).map((e) => e.v));
+        me.gap = Math.max(1, Math.round(minPod - mine.v));
+      }
+    }
+    return { id: cat.id, title: cat.title, unit: cat.unit, top, me, n: L.length };
+  });
+  return { cats: out, n: c.n, at: c.at };
+}
+
 async function fichaRoutes(route, req, url, admin) {
   const q = (n) => str(url.searchParams.get(n), 120);
   if (route === "fichas-resumen" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador puede ver este resumen.");
     const teachers = await read("teachers");
     return json({ sum: await docSummary(teachers.data), at: Date.now() });
+  }
+  if (route === "rank-opt" && req.method === "POST") {
+    const b = await readJson(req);
+    const tkey = str(b && b.tkey, 80);
+    const role = await fichaAccess(req, tkey, admin);
+    if (role !== "key") fail("Solo el propio profesor puede apuntarse o darse de baja del ranking, desde su ficha y con su clave.");
+    return withLock(async () => {
+      const old = await readFicha(tkey);
+      const rec = { ...old, rank: { on: !!(b && b.on), at: Date.now() }, updatedAt: old.updatedAt };
+      await store().setJSON("ficha/" + tkey, rec);
+      try { await store().delete("rankcache"); } catch {}
+      return json({ ok: true, rank: rec.rank });
+    });
+  }
+  if (route === "ranking" && req.method === "GET") {
+    const tkey = q("tkey");
+    const role = await fichaAccess(req, tkey, admin);
+    if (role !== "key" && role !== "admin") fail("El ranking solo lo ve cada profesor desde su ficha.");
+    if (role === "key") {
+      const f = await readFicha(tkey);
+      if (!(f.rank && f.rank.on)) return json({ participating: false });
+      return json({ participating: true, ...(await rankView(tkey, false)) });
+    }
+    return json({ participating: true, admin: true, ...(await rankView("", true)) });
   }
   if (route === "weekly-get" && req.method === "GET") {
     if (!admin) fail("Solo el coordinador.");
@@ -1397,13 +1503,20 @@ async function fichaRoutes(route, req, url, admin) {
       const id = randomBytes(6).toString("hex");
       await store().set("docs/" + tkey + "/" + id, buf);
       const rec = { ...old, docs: [...old.docs, { id, name, ext, size: buf.byteLength, at: Date.now(), by: role, ...(cat ? { cat } : {}) }], updatedAt: Date.now() };
+      let tanita = "";
+      const tnRaw = str(url.searchParams.get("tn"), 3000);
+      if (cat === "valoracion" && tnRaw) {
+        const tn = cleanTanita(tnRaw);
+        if (tn) { rec.tanita = mergeTanita(old.tanita, tn); tanita = "ok"; try { await store().delete("rankcache"); } catch {} }
+        else tanita = "no";
+      }
       await store().setJSON("ficha/" + tkey, rec);
       // Si lo sube el alumnado (o el coordinador), el documento también le llega al profesor a su correo corporativo.
       let mailed = "";
       if (role !== "key") {
         try { mailed = await mailDocToTeacher(tkey, { name, ext, cat, buf }); } catch (e) { mailed = ""; }
       }
-      return json({ role, ficha: rec, mailed });
+      return json({ role, ficha: rec, mailed, tanita });
     });
   }
   if (route === "doc" && req.method === "GET") {

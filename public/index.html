@@ -253,6 +253,11 @@ main .rv-top{flex-wrap:wrap;gap:.2rem}main .rv-top h2{width:100%;font-size:1.45r
 .sess.done{position:relative;border-left-color:#3B6D11;background:linear-gradient(0deg,rgba(59,109,17,.12),rgba(59,109,17,.12)),var(--surface)}
 .sess.done.today{background:linear-gradient(0deg,rgba(59,109,17,.12),rgba(59,109,17,.12)),var(--surface)}
 .sess.done>div{opacity:.62}
+.rk-cat{margin:.6rem 0 .9rem}.rk-cat h4{margin:.1rem 0 .3rem;font-size:.95rem}
+.rk-row{display:flex;align-items:center;gap:.6rem;padding:.3rem 0;border-top:1px solid var(--line,rgba(0,0,0,.08))}.rk-cat .rk-row:first-of-type{border-top:0}
+.rk-m{width:1.6rem;height:1.6rem;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:700;flex:none;background:#d3d1c7;color:#2c2c2a}
+.rk-m1{background:#fac775;color:#412402}.rk-m3{background:#f5c4b3;color:#4a1b0c}
+.rk-me{margin-top:.3rem;padding:.35rem .6rem;border-radius:8px;background:rgba(36,89,168,.1);color:#1d4a8c;font-size:.85rem}.rk-none{background:rgba(0,0,0,.05);color:inherit;opacity:.8}
 .okc{position:absolute;top:.4rem;right:.4rem;width:1.6rem;height:1.6rem;border-radius:50%;background:#3B6D11;color:#fff;display:inline-flex;align-items:center;justify-content:center}
 .okc svg{width:14px;height:14px}
 .sess.today{background:linear-gradient(90deg,rgba(255,214,102,.22),transparent 70%),var(--surface)}
@@ -364,6 +369,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .dc-valoracion{--dc:#5f9fe6;--dc-ink:#08182b}}
 .dc-chip{display:inline-block;background:var(--dc);color:var(--dc-ink);font-weight:800;font-size:.74rem;letter-spacing:.05em;padding:.15rem .6rem;border-radius:999px;margin-bottom:.15rem}
 
+/* v1.48.0 Ranking MonasFIT */
 /* v1.47.0 Documentos al correo del profesor */
 /* v1.46.3 VE solo en franjas sin valoración */
 /* v1.46.2 Listado de profesorado */
@@ -380,6 +386,7 @@ input[type=file]::file-selector-button{background:var(--accent);color:var(--acce
 </head>
 <body>
 <div id="app"><div class="wrap"><p style="padding:2rem 0">Cargando MonasFIT Reservas…</p></div></div>
+<script src="/tanita.js"></script>
 <script>
 (function(){
 "use strict";
@@ -887,6 +894,41 @@ var RATE_ITEMS={
   E:[["puntualidad","Puntualidad y preparación"],["trato","Trato y motivación"],["tecnica","Corrección y seguridad en los ejercicios"],["adaptacion","Adaptación de los ejercicios a mi nivel"],["global","Repetiría con este equipo"]]
 };
 function fmt1(x){return String(Math.round(x*10)/10).replace(".",",");}
+async function tnRead(f,k,cat){
+  var out={q:"",warn:""};
+  try{
+    if(cat!=="valoracion"||!window.MFTanita||!/\.pdf$/i.test(f.name))return out;
+    var o=await MFTanita.read(f);
+    if(!o)return out;
+    var t=S.teachers[k];
+    if(t&&!MFTanita.sameName(o.name,t.name))out.warn=" Ojo: el nombre del PDF ("+o.name+") no coincide con el de la ficha. Comprueba que has elegido al profesor correcto.";
+    out.q="&tn="+encodeURIComponent(MFTanita.pack(o));
+  }catch(e){}
+  return out;
+}
+function tnMsg(r,tn){return (r&&r.tanita==="ok"?" Datos de la báscula leídos para el ranking.":"")+(tn&&tn.warn||"");}
+function vRank(d){
+  var f=d.ficha||{},on=!!(f.rank&&f.rank.on);
+  var h='<div class="card"><h3>🏆 Ranking MonasFIT</h3>';
+  if(!on){
+    return h+'<p class="small" style="margin-top:0">Participa en el ranking del proyecto: <strong>más masa muscular ganada, más grasa reducida, más entrenamientos realizados y más constancia</strong>. Se calcula con los PDF de la báscula que sube el alumnado. Salen solo los tres primeros de cada categoría, <strong>sin cifras</strong>, y únicamente las personas que participan. Puedes darte de baja cuando quieras.</p>'+
+      '<div class="row"><button class="btn primary" data-act="rankOpt" data-on="1"'+(S.busy?" disabled":"")+'>Quiero participar</button></div></div>';
+  }
+  if(!S.rank&&!S.rankReq){S.rankReq=true;var kk=S.fk;setTimeout(function(){api("ranking?tkey="+encodeURIComponent(kk),{headers:fHeaders(kk)}).then(function(r){S.rank=r;render();}).catch(function(){S.rank={err:true};render();});},0);}
+  if(!S.rank)return h+'<p class="muted small">Cargando el ranking…</p></div>';
+  if(S.rank.err||!S.rank.cats)return h+'<p class="muted small">No se pudo cargar el ranking ahora. Inténtalo más tarde.</p></div>';
+  var medal=function(p){return '<span class="rk-m rk-m'+Math.min(p,3)+'">'+p+'</span>';};
+  S.rank.cats.forEach(function(c){
+    h+='<div class="rk-cat"><h4>'+esc(c.title)+'</h4>';
+    if(!c.top.length)h+='<p class="muted small" style="margin:.2rem 0">Todavía no hay datos suficientes.</p>';
+    c.top.forEach(function(t){h+='<div class="rk-row">'+medal(t.pos)+'<span>'+esc(t.name)+'</span></div>';});
+    if(c.me)h+='<div class="rk-me">Tu posición: '+c.me.pos+'.º'+(c.me.gap?' · te faltan '+c.me.gap+' '+(c.unit||"")+' para entrar al podio':'')+'</div>';
+    else h+='<div class="rk-me rk-none">Todavía no apareces en esta categoría.</div>';
+    h+='</div>';
+  });
+  h+='<p class="muted small" style="margin-bottom:.4rem">Participan '+S.rank.n+' profesores. Se actualiza varias veces al día. Para entrar en músculo, grasa y constancia hace falta que el alumnado haya subido tu valoración de la báscula (PDF) al menos dos veces.</p>';
+  return h+'<div class="row"><button class="btn sm" data-act="rankOpt" data-on="0"'+(S.busy?" disabled":"")+'>Darme de baja del ranking</button></div></div>';
+}
 function vRate(d){
   var teams=d.rateTeams||[];
   var html='<div class="card"><h3>Valora a tus equipos</h3><p class="muted small" style="margin-top:0">Cuéntanos qué tal te ha ido con el equipo que te valoró y con los que te han entrenado. Solo lo ve la coordinación y sirve para el ranking.</p><p class="muted small">Guía: <strong>3 ★ = cumplió lo esperado</strong> · 5 ★ = superó lo esperado · 1 ★ = hay que mejorar mucho.</p>';
@@ -1002,7 +1044,7 @@ function vFicha(){
   }).join("")+'<div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="fSaveEnt"'+(S.busy?" disabled":"")+'>Guardar entrevista</button></div></div>';
   }
 
-  if(d.role==="key")html+=vRate(d);
+  if(d.role==="key")html+=vRank(d)+vRate(d);
 
   // Documentos
   html+='<div class="card docs-card"><h3>📁 Documentos</h3><p class="muted small" style="margin-top:0">Aquí se guardan la valoración, el cuestionario PAR-Q y las rutinas que generan en la app MonasFIT Prescribe.</p>';
@@ -1099,9 +1141,13 @@ function mailLogCard(){
   return h+'</details>';
 }
 function noticeSeen(n){try{var m=JSON.parse(lsGet("monasfit.notices")||"{}");return m[n.id]===n.at;}catch(e){return false;}}
+function vNews(){
+  if(S.admin||lsGet("monasfit.news.rank"))return "";
+  return '<section class="notice" role="note" aria-label="Novedad"><h3>🏆 Novedad: Ranking MonasFIT</h3><p>Ya puedes participar en el ranking del proyecto: quién gana más masa muscular, pierde más grasa, entrena más y es más constante. Se muestra solo el podio, <strong>sin cifras</strong>, y <strong>solo si tú lo aceptas</strong> desde tu ficha, en la pestaña Profesorado. Puedes darte de baja cuando quieras.</p><div class="row"><button class="btn sm primary" data-act="newsGo">Ir a mi ficha</button> <button class="btn sm" data-act="newsOk">Cerrar</button></div></section>';
+}
 function vNotices(){
   if(!S.loaded||S.needCode)return "";
-  return (S.notices||[]).filter(function(n){return n.state==="activo"&&!noticeSeen(n)&&!(S.tab==="gestion"&&S.admin);}).map(function(n){
+  return vNews()+(S.notices||[]).filter(function(n){return n.state==="activo"&&!noticeSeen(n)&&!(S.tab==="gestion"&&S.admin);}).map(function(n){
     var t=esc(n.text).replace(/\n/g,"<br>").replace(/(https?:\/\/[^\s<]+)/g,'<a href="$1" target="_blank" rel="noopener">$1</a>');
     return '<section class="notice'+(n.level==="warn"?' warn':'')+'" role="note" aria-label="Aviso"><h3>'+(n.level==="warn"?'⚠️ ':'📣 ')+esc(n.title)+'</h3><p>'+t+'</p><div class="row"><button class="btn sm" data-act="noticeOk" data-id="'+esc(n.id)+'">Entendido</button></div></section>';
   }).join("");
@@ -1820,6 +1866,12 @@ var actions={
   mailDayToggle:function(){var nv=!(S.mailSt&&S.mailSt.day);run(async function(){var r=await api("mail-cfg",{method:"POST",body:{day:nv}});S.mailSt.day=r.day;},nv?"Recordatorio del día anterior activado.":"Recordatorio del día anterior desactivado.");},
   mailDayEToggle:function(){var nv=!(S.mailSt&&S.mailSt.dayE);run(async function(){var r=await api("mail-cfg",{method:"POST",body:{dayE:nv}});S.mailSt.dayE=r.dayE;},nv?"Aviso en entrenamientos activado.":"Aviso en entrenamientos desactivado.");},
   mailTest:function(){var el=document.getElementById("mail-to"),v=el?el.value.trim():"";run(async function(){await api("mail-test",{method:"POST",body:{to:v}});},"Correo de prueba enviado a "+v+".");},
+  newsOk:function(){lsSet("monasfit.news.rank","1");render();},
+  newsGo:function(){lsSet("monasfit.news.rank","1");S.tab="profesorado";if(location.hash!=="#profesorado")location.hash="#profesorado";render();},
+  rankOpt:function(d){
+    var k=S.fk,on=d.on==="1";
+    run(async function(){var r=await api("rank-opt",{method:"POST",headers:fHeaders(k),body:{tkey:k,on:on}});S.fdata.ficha.rank=r.rank;S.rank=null;S.rankReq=false;S.noRestore=true;},on?"Ya participas en el ranking.":"Te has dado de baja del ranking.");
+  },
   noticeOk:function(d){var m={};try{m=JSON.parse(lsGet("monasfit.notices")||"{}");}catch(e){}var n=(S.notices||[]).filter(function(x){return x.id===d.id;})[0];if(n){m[n.id]=n.at;lsSet("monasfit.notices",JSON.stringify(m));}render();},
   noticeEdit:function(d){var n=(S.notices||[]).filter(function(x){return x.id===d.id;})[0];if(!n)return;S.noticeForm={id:n.id,title:n.title,text:n.text,level:n.level,from:n.from,to:n.to};S.noRestore=true;render();var el=document.getElementById("nt-title");if(el)el.scrollIntoView({block:"center"});},
   noticeNew:function(){S.noticeForm=null;S.noRestore=true;render();},
@@ -1907,10 +1959,10 @@ var changes={
     if(!cat){el.value="";say("Elige primero el tipo de documento (valoración corporal, PAR-Q o prescripción).","err");render();return;}
     if(f.size>4*1024*1024){el.value="";say("El archivo pesa más de 4 MB.","err");render();return;}
     run(async function(){
-      var buf=await f.arrayBuffer();
-      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
-      S.fdata.ficha=r.ficha;S.noRestore=true;return r;
-    },function(r){var role=S.fdata&&S.fdata.role;return "Documento subido."+(r&&r.mailed?" Se ha enviado también al correo del profesor.":(role==="key"?"":" El profesor no tiene correo registrado, o el envío no se pudo hacer."));});
+      var buf=await f.arrayBuffer();var tn=await tnRead(f,k,cat);
+      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name)+tn.q,{method:"POST",headers:fHeaders(k),raw:buf});
+      S.fdata.ficha=r.ficha;S.noRestore=true;S.rank=null;S.rankReq=false;r.tnw=tn;return r;
+    },function(r){var role=S.fdata&&S.fdata.role;return "Documento subido."+tnMsg(r,r&&r.tnw)+(r&&r.mailed?" Se ha enviado también al correo del profesor.":(role==="key"?"":" El profesor no tiene correo registrado, o el envío no se pudo hacer."));});
   },
   tdoc:function(el){
     var f=el.files&&el.files[0];if(!f)return;
@@ -1920,10 +1972,10 @@ var changes={
     if(f.size>4*1024*1024){el.value="";say("El archivo pesa más de 4 MB.","err");render();return;}
     var who=S.teachers[k]?S.teachers[k].name:"";
     run(async function(){
-      var buf=await f.arrayBuffer();
-      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name),{method:"POST",headers:fHeaders(k),raw:buf});
-      S.noRestore=true;return r;
-    },function(r){return "Documento subido"+(who?" a la ficha de "+who:"")+"."+(r&&r.mailed?" Se ha enviado también a su correo.":" No se ha podido enviar a su correo (no tiene o falló el envío).");});
+      var buf=await f.arrayBuffer();var tn=await tnRead(f,k,cat);
+      var r=await api("doc?tkey="+encodeURIComponent(k)+"&cat="+encodeURIComponent(cat)+"&name="+encodeURIComponent(f.name)+tn.q,{method:"POST",headers:fHeaders(k),raw:buf});
+      S.noRestore=true;r.tnw=tn;return r;
+    },function(r){return "Documento subido"+(who?" a la ficha de "+who:"")+"."+tnMsg(r,r&&r.tnw)+(r&&r.mailed?" Se ha enviado también a su correo.":" No se ha podido enviar a su correo (no tiene o falló el envío).");});
   },
   docCat:function(el){var k=S.fk,id=el.dataset.id,c=el.value;if(!c){render();return;}run(async function(){var r=await api("doc-cat",{method:"POST",headers:fHeaders(k),body:{tkey:k,id:id,cat:c}});S.fdata.ficha=r.ficha;S.noRestore=true;},"Tipo de documento cambiado.");},
   next:function(el){var n=Number(el.value)||1;run(async function(){S.config={nextTeam:n,updatedAt:Date.now()};await saveColl("config");},"Próximo equipo actualizado.");},
